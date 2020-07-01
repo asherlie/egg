@@ -121,10 +121,10 @@ struct node{
 
 typedef enum {ALERT = 0, TEXT}mtype;
 
-struct msg{
+struct msg_header{
     mtype type;
     /* bufsz is ony used for TEXT mtypes
-     * otherwise, a bufsz of sizeof(struct sockaddr_in) is assumed
+     * otherwise, a bufsz of sizeof(struct sockaddr_in)*2 is assumed
      */
     int bufsz;
 };
