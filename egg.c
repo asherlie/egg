@@ -149,7 +149,14 @@ _Bool spread_msg(struct node* n, int msglen, char* msg, int from_sock){
 
 void* accept_connections_thread(void* node_v){
     struct node* n = node_v;
+
+    struct sockaddr_in addr;
+    socklen_t addrlen;
+
     while(n->active){
+        /* TODO: check if addrlen != sizeof(struct sockaddr_in) */
+        int fd = accept(n->sock, (struct sockaddr*)&addr, &addrlen);
+        if(fd == -1)perror("accept()");
     }
     return NULL;
 }
@@ -171,8 +178,9 @@ void init_node(struct node* n){
  */
 _Bool join_tree(struct node* n, struct sockaddr_in addr){
     n->parent.addr = addr;
-    n->parent.sock = connect(n->sock, (struct sockaddr*)&addr, sizeof(struct sockaddr_in));
-    return n->parent.sock != -1;
+     _Bool ret = !connect(n->sock, (struct sockaddr*)&addr, sizeof(struct sockaddr_in));
+    n->parent.sock = n->sock;
+    return ret;
 }
 
 /* node operations end */
