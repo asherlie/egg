@@ -117,7 +117,7 @@ struct peer{
 };
 
 struct node{
-    _Bool active;
+    volatile _Bool active;
     int sock, n_children, children_cap;
     /* parent is the peer we've connected to directly to join the network */
     struct peer parent, * children;
