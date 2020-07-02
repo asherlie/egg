@@ -104,9 +104,12 @@ each client will probably need
 #endif
 
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <pthread.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <arpa/inet.h>
 
 struct peer{
     struct sockaddr_in addr;
@@ -114,7 +117,7 @@ struct peer{
 };
 
 struct node{
-    int sock, n_children;
+    int sock, n_children, children_cap;
     /* parent is the peer we've connected to directly to join the network */
     struct peer parent, * children;
 };
@@ -129,8 +132,55 @@ struct msg_header{
     int bufsz;
 };
 
+_Bool spread_msg(struct node* n, int msglen, char* msg, int from_sock){
+    _Bool ret = 1;
+    struct msg_header header;
+    header.type = TEXT;
+    header.bufsz = msglen;
+    /*if(n->parent.sock != from_sock)send(n->parent.sock, msg, );*/
+    if(n->parent.sock != from_sock){
+        ret &= (send(n->parent.sock, &header, sizeof(struct msg_header), 0)
+                == sizeof(struct msg_header));
+        ret &= (send(n->parent.sock, msg, msglen, 0) == msglen);
+    }
+    return ret;
+}
+
+/*void* */
+
+/* node operations */
+
+void init_node(struct node* n){
+    if((n->sock = socket(AF_INET, SOCK_STREAM, 0)) == -1)perror("socket()");
+    if(listen(n->sock, 0) == -1)perror("listen()");
+    n->n_children = 0;
+    n->children_cap = 50;
+    memset(&n->parent, 0, sizeof(struct peer));
+    n->children = malloc(sizeof(struct peer)*n->children_cap);
+}
+
+/* TODO: we'll need to lock a mutex lock when altering structure
+ * of tree if we're enabling mending
+ */
+_Bool join_tree(struct node* n, struct sockaddr_in addr){
+    n->parent.addr = addr;
+    n->parent.sock = connect(n->sock, (struct sockaddr*)&addr, sizeof(struct sockaddr_in));
+    return n->parent.sock != -1;
+}
+
+/* node operations end */
+
 int main(int a, char** b){
-    (void)a;
-    (void)b;
+    /* ./egg <nick>
+     * ./egg <nick> <ip>
+     */
+    struct node n;
+    init_node(&n);
+    if(a > 2){
+        struct sockaddr_in addr = {0};
+        addr.sin_family = AF_INET;
+        inet_aton(b[1], &addr.sin_addr);
+        join_tree(&n, addr);
+    }
     return 0;
 }
