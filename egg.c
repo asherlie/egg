@@ -117,6 +117,7 @@ struct peer{
 };
 
 struct node{
+    _Bool active;
     int sock, n_children, children_cap;
     /* parent is the peer we've connected to directly to join the network */
     struct peer parent, * children;
@@ -146,7 +147,12 @@ _Bool spread_msg(struct node* n, int msglen, char* msg, int from_sock){
     return ret;
 }
 
-/*void* */
+void* accept_connections_thread(void* node_v){
+    struct node* n = node_v;
+    while(n->active){
+    }
+    return NULL;
+}
 
 /* node operations */
 
@@ -157,6 +163,7 @@ void init_node(struct node* n){
     n->children_cap = 50;
     memset(&n->parent, 0, sizeof(struct peer));
     n->children = malloc(sizeof(struct peer)*n->children_cap);
+    n->active = 1;
 }
 
 /* TODO: we'll need to lock a mutex lock when altering structure
@@ -180,7 +187,7 @@ int main(int a, char** b){
         struct sockaddr_in addr = {0};
         addr.sin_family = AF_INET;
         inet_aton(b[1], &addr.sin_addr);
-        join_tree(&n, addr);
+        if(!join_tree(&n, addr))puts("failed to connect");
     }
     return 0;
 }
