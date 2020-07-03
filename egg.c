@@ -147,6 +147,11 @@ _Bool spread_msg(struct node* n, int msglen, char* msg, int from_sock){
                 == sizeof(struct msg_header));
         ret &= (send(n->parent.sock, msg, msglen, 0) == msglen);
     }
+    for(int i = 0; i < n->n_children; ++i){
+        ret &= (send(n->children[i].sock, &header, sizeof(struct msg_header), 0)
+                == sizeof(struct msg_header));
+        ret &= (send(n->children[i].sock, msg, msglen, 0) == msglen);
+    }
     return ret;
 }
 
@@ -207,6 +212,21 @@ void init_node(struct node* n, struct sockaddr_in local_addr){
     memset(&n->parent, 0, sizeof(struct peer));
     n->children = malloc(sizeof(struct peer)*n->children_cap);
     n->active = 1;
+}
+
+struct peer init_peer(int sock, struct sockaddr_in addr){
+    struct peer ret;
+    ret.sock = sock;
+    ret.addr = addr;
+    return ret;
+}
+
+void insert_child(struct node* n, struct peer p){
+    if(n->n_children == n->children_cap){
+        n->children_cap *= 2;
+        n->children = realloc(n->children, n->children_cap);
+    }
+    n->children[n->n_children++] = p;
 }
 
 /* TODO: we'll need to lock a mutex lock when altering structure
