@@ -148,6 +148,7 @@ _Bool spread_msg(struct node* n, int msglen, char* msg, int from_sock){
         ret &= (send(n->parent.sock, msg, msglen, 0) == msglen);
     }
     for(int i = 0; i < n->n_children; ++i){
+        if(n->children[i].sock == from_sock)continue;
         ret &= (send(n->children[i].sock, &header, sizeof(struct msg_header), 0)
                 == sizeof(struct msg_header));
         ret &= (send(n->children[i].sock, msg, msglen, 0) == msglen);
