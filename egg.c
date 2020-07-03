@@ -171,20 +171,34 @@ pthread_t spawn_accept_connections_thread(struct node* n){
     return pth;
 }
 
+struct sockaddr_in strtoip(char* ip){
+    struct sockaddr_in ret = {0};
+    ret.sin_port = htons(PORT);
+    ret.sin_family = AF_INET;
+    inet_aton(ip, &ret.sin_addr);
+    return ret;
+}
+
 /* node operations */
 
-/*void init_node(struct node* n, struct sockaddr_in local_addr){*/
-void init_node(struct node* n){
+void init_node(struct node* n, struct sockaddr_in local_addr){
+/*void init_node(struct node* n){*/
     if((n->sock = socket(AF_INET, SOCK_STREAM, 0)) == -1)perror("socket()");
-    struct sockaddr_in addr = {0};
-    addr.sin_family = AF_INET;
-    addr.sin_port = htons(PORT);
-    addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    /*
+     *struct sockaddr_in addr = {0};
+     *addr.sin_family = AF_INET;
+     *addr.sin_port = htons(PORT);
+     *addr.sin_addr.s_addr = htonl(INADDR_ANY);
+     */
+
     /*
      *struct sockaddr_in s = strtoip("192.168.0.5");
      *addr.sin_addr.s_addr = s.sin_addr.s_addr;
      */
-    if(bind(n->sock, (struct sockaddr*)&addr, sizeof(struct sockaddr_in)) == -1)perror("bind()");
+
+    /*if(bind(n->sock, (struct sockaddr*)&addr, sizeof(struct sockaddr_in)) == -1)perror("bind()");*/
+    if(bind(n->sock, (struct sockaddr*)&local_addr, sizeof(struct sockaddr_in)) == -1)perror("bind()");
+
     /*++local_addr.sin_port;*/
     /*if(bind(n->sock, (struct sockaddr*)&local_addr, sizeof(struct sockaddr_in)) == -1)perror("bind()");*/
     if(listen(n->sock, 5) == -1)perror("listen()");
@@ -210,29 +224,24 @@ _Bool join_tree(struct node* n, struct sockaddr_in addr){
 
 /* node operations end */
 
-struct sockaddr_in strtoip(char* ip){
-    struct sockaddr_in ret = {0};
-    ret.sin_port = htons(PORT);
-    ret.sin_family = AF_INET;
-    inet_aton(ip, &ret.sin_addr);
-    return ret;
-}
-
+/* TODO: 
+ * use INADDR_ANY to simplify use
+ */
 int main(int a, char** b){
     /* ./egg <nick> <local ip>
      * ./egg <nick> <local ip> <remote ip>
      */
-    if(a < 2){
+    if(a < 3){
         printf("usage:\n  %s <nick> <local ip>\n  %s <nick> <local ip> <remote ip>\n",
                *b, *b);
         return EXIT_FAILURE;
     }
     struct node n;
-    /*init_node(&n, strtoip(b[1]));*/
-    init_node(&n);
+    init_node(&n, strtoip(b[2]));
+    /*init_node(&n);*/
     pthread_t accept_th = spawn_accept_connections_thread(&n);
-    if(a > 2){
-        struct sockaddr_in addr = strtoip(b[2]);
+    if(a > 3){
+        struct sockaddr_in addr = strtoip(b[3]);
         if(!join_tree(&n, addr))puts("failed to connect");
     }
     pthread_join(accept_th, NULL);
