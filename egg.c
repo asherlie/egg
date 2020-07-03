@@ -105,11 +105,14 @@ each client will probably need
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include <string.h>
 #include <pthread.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+
+#define PORT 8080
 
 struct peer{
     struct sockaddr_in addr;
@@ -157,15 +160,34 @@ void* accept_connections_thread(void* node_v){
         /* TODO: check if addrlen != sizeof(struct sockaddr_in) */
         int fd = accept(n->sock, (struct sockaddr*)&addr, &addrlen);
         if(fd == -1)perror("accept()");
+        printf("accepted new conn at %i\n", fd);
     }
     return NULL;
 }
 
+pthread_t spawn_accept_connections_thread(struct node* n){
+    pthread_t pth;
+    pthread_create(&pth, NULL, accept_connections_thread, (void*)n);
+    return pth;
+}
+
 /* node operations */
 
+/*void init_node(struct node* n, struct sockaddr_in local_addr){*/
 void init_node(struct node* n){
     if((n->sock = socket(AF_INET, SOCK_STREAM, 0)) == -1)perror("socket()");
-    if(listen(n->sock, 0) == -1)perror("listen()");
+    struct sockaddr_in addr = {0};
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(PORT);
+    addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    /*
+     *struct sockaddr_in s = strtoip("192.168.0.5");
+     *addr.sin_addr.s_addr = s.sin_addr.s_addr;
+     */
+    if(bind(n->sock, (struct sockaddr*)&addr, sizeof(struct sockaddr_in)) == -1)perror("bind()");
+    /*++local_addr.sin_port;*/
+    /*if(bind(n->sock, (struct sockaddr*)&local_addr, sizeof(struct sockaddr_in)) == -1)perror("bind()");*/
+    if(listen(n->sock, 5) == -1)perror("listen()");
     n->n_children = 0;
     n->children_cap = 50;
     memset(&n->parent, 0, sizeof(struct peer));
@@ -178,24 +200,41 @@ void init_node(struct node* n){
  */
 _Bool join_tree(struct node* n, struct sockaddr_in addr){
     n->parent.addr = addr;
-     _Bool ret = !connect(n->sock, (struct sockaddr*)&addr, sizeof(struct sockaddr_in));
-    n->parent.sock = n->sock;
+     /*_Bool ret = !connect(n->sock, (struct sockaddr*)&addr, sizeof(struct sockaddr_in));*/
+    int sock = socket(AF_INET, SOCK_STREAM, 0);
+    _Bool ret = !connect(sock, (struct sockaddr*)&addr, sizeof(struct sockaddr_in));
+    if(!ret)perror("connect()");
+    n->parent.sock = sock;
     return ret;
 }
 
 /* node operations end */
 
+struct sockaddr_in strtoip(char* ip){
+    struct sockaddr_in ret = {0};
+    ret.sin_port = htons(PORT);
+    ret.sin_family = AF_INET;
+    inet_aton(ip, &ret.sin_addr);
+    return ret;
+}
+
 int main(int a, char** b){
-    /* ./egg <nick>
-     * ./egg <nick> <ip>
+    /* ./egg <nick> <local ip>
+     * ./egg <nick> <local ip> <remote ip>
      */
+    if(a < 2){
+        printf("usage:\n  %s <nick> <local ip>\n  %s <nick> <local ip> <remote ip>\n",
+               *b, *b);
+        return EXIT_FAILURE;
+    }
     struct node n;
+    /*init_node(&n, strtoip(b[1]));*/
     init_node(&n);
+    pthread_t accept_th = spawn_accept_connections_thread(&n);
     if(a > 2){
-        struct sockaddr_in addr = {0};
-        addr.sin_family = AF_INET;
-        inet_aton(b[1], &addr.sin_addr);
+        struct sockaddr_in addr = strtoip(b[2]);
         if(!join_tree(&n, addr))puts("failed to connect");
     }
+    pthread_join(accept_th, NULL);
     return 0;
 }
