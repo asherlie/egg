@@ -178,6 +178,14 @@ void mq_insert(struct msgqueue* mq, struct mq_msg msg){
     pthread_mutex_unlock(&mq->mq_lock);
 }
 
+struct mq_msg mq_pop(struct msgqueue* mq){
+    pthread_mutex_lock(&mq->mq_lock);
+    /* TODO: messages should be popped from beginning */
+    struct mq_msg ret = mq->msgs[--mq->n_msgs];
+    pthread_mutex_unlock(&mq->mq_lock);
+    return ret;
+}
+
 /* message queue end */
 
 struct node_peer_mq{
