@@ -227,23 +227,8 @@ void init_node(struct node* n, struct sockaddr_in local_addr){
     mq_init(n->mq);
     pthread_mutex_init(&n->children_lock, NULL);
     if((n->sock = socket(AF_INET, SOCK_STREAM, 0)) == -1)perror("socket()");
-    /*
-     *struct sockaddr_in addr = {0};
-     *addr.sin_family = AF_INET;
-     *addr.sin_port = htons(PORT);
-     *addr.sin_addr.s_addr = htonl(INADDR_ANY);
-     */
-
-    /*
-     *struct sockaddr_in s = strtoip("192.168.0.5");
-     *addr.sin_addr.s_addr = s.sin_addr.s_addr;
-     */
-
-    /*if(bind(n->sock, (struct sockaddr*)&addr, sizeof(struct sockaddr_in)) == -1)perror("bind()");*/
     if(bind(n->sock, (struct sockaddr*)&local_addr, sizeof(struct sockaddr_in)) == -1)perror("bind()");
 
-    /*++local_addr.sin_port;*/
-    /*if(bind(n->sock, (struct sockaddr*)&local_addr, sizeof(struct sockaddr_in)) == -1)perror("bind()");*/
     if(listen(n->sock, 5) == -1)perror("listen()");
     n->n_children = 0;
     n->children_cap = 50;
@@ -442,7 +427,15 @@ int main(int a, char** b){
     n.mq = &MQ;
 
     /* TODO: if *b[2] == '_', use INADDR_ANY */
-    init_node(&n, strtoip(b[2]));
+    if(*b[2] == '_'){
+        struct sockaddr_in any;
+        memset(&any, 0, sizeof(struct sockaddr_in));
+        any.sin_family = AF_INET;
+        any.sin_port = htons(PORT);
+        any.sin_addr.s_addr = htonl(INADDR_ANY);
+        init_node(&n, any);
+    }
+    else init_node(&n, strtoip(b[2]));
     /*init_node(&n);*/
     pthread_t accept_th = spawn_accept_connections_thread(&n);
     if(a > 3){
