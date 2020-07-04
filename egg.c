@@ -136,55 +136,6 @@ struct msg_header{
     int bufsz;
 };
 
-_Bool spread_msg(struct node* n, int msglen, char* msg, int from_sock){
-    _Bool ret = 1;
-    struct msg_header header;
-    header.type = TEXT;
-    header.bufsz = msglen;
-    /*if(n->parent.sock != from_sock)send(n->parent.sock, msg, );*/
-    if(n->parent.sock != from_sock){
-        ret &= (send(n->parent.sock, &header, sizeof(struct msg_header), 0)
-                == sizeof(struct msg_header));
-        ret &= (send(n->parent.sock, msg, msglen, 0) == msglen);
-    }
-    for(int i = 0; i < n->n_children; ++i){
-        if(n->children[i].sock == from_sock)continue;
-        ret &= (send(n->children[i].sock, &header, sizeof(struct msg_header), 0)
-                == sizeof(struct msg_header));
-        ret &= (send(n->children[i].sock, msg, msglen, 0) == msglen);
-    }
-    return ret;
-}
-
-void* accept_connections_thread(void* node_v){
-    struct node* n = node_v;
-
-    struct sockaddr_in addr;
-    socklen_t addrlen;
-
-    while(n->active){
-        /* TODO: check if addrlen != sizeof(struct sockaddr_in) */
-        int fd = accept(n->sock, (struct sockaddr*)&addr, &addrlen);
-        if(fd == -1)perror("accept()");
-        printf("accepted new conn at %i\n", fd);
-    }
-    return NULL;
-}
-
-pthread_t spawn_accept_connections_thread(struct node* n){
-    pthread_t pth;
-    pthread_create(&pth, NULL, accept_connections_thread, (void*)n);
-    return pth;
-}
-
-struct sockaddr_in strtoip(char* ip){
-    struct sockaddr_in ret = {0};
-    ret.sin_port = htons(PORT);
-    ret.sin_family = AF_INET;
-    inet_aton(ip, &ret.sin_addr);
-    return ret;
-}
-
 /* node operations */
 
 void init_node(struct node* n, struct sockaddr_in local_addr){
@@ -244,6 +195,56 @@ _Bool join_tree(struct node* n, struct sockaddr_in addr){
 }
 
 /* node operations end */
+
+_Bool spread_msg(struct node* n, int msglen, char* msg, int from_sock){
+    _Bool ret = 1;
+    struct msg_header header;
+    header.type = TEXT;
+    header.bufsz = msglen;
+    /*if(n->parent.sock != from_sock)send(n->parent.sock, msg, );*/
+    if(n->parent.sock != from_sock){
+        ret &= (send(n->parent.sock, &header, sizeof(struct msg_header), 0)
+                == sizeof(struct msg_header));
+        ret &= (send(n->parent.sock, msg, msglen, 0) == msglen);
+    }
+    for(int i = 0; i < n->n_children; ++i){
+        if(n->children[i].sock == from_sock)continue;
+        ret &= (send(n->children[i].sock, &header, sizeof(struct msg_header), 0)
+                == sizeof(struct msg_header));
+        ret &= (send(n->children[i].sock, msg, msglen, 0) == msglen);
+    }
+    return ret;
+}
+
+void* accept_connections_thread(void* node_v){
+    struct node* n = node_v;
+
+    struct sockaddr_in addr;
+    socklen_t addrlen;
+
+    while(n->active){
+        /* TODO: check if addrlen != sizeof(struct sockaddr_in) */
+        int fd = accept(n->sock, (struct sockaddr*)&addr, &addrlen);
+        if(fd == -1)perror("accept()");
+        insert_child(n, init_peer(fd, addr));
+        printf("accepted new conn at %i\n", fd);
+    }
+    return NULL;
+}
+
+pthread_t spawn_accept_connections_thread(struct node* n){
+    pthread_t pth;
+    pthread_create(&pth, NULL, accept_connections_thread, (void*)n);
+    return pth;
+}
+
+struct sockaddr_in strtoip(char* ip){
+    struct sockaddr_in ret = {0};
+    ret.sin_port = htons(PORT);
+    ret.sin_family = AF_INET;
+    inet_aton(ip, &ret.sin_addr);
+    return ret;
+}
 
 /* TODO: 
  * use INADDR_ANY to simplify use
