@@ -395,7 +395,9 @@ pthread_t spawn_accept_connections_thread(struct node* n){
 }
 
 struct sockaddr_in strtoip(char* ip){
-    struct sockaddr_in ret = {0};
+    struct sockaddr_in ret;
+    memset(&ret, 0, sizeof(struct sockaddr_in));
+
     ret.sin_port = htons(PORT);
     ret.sin_family = AF_INET;
     inet_aton(ip, &ret.sin_addr);
