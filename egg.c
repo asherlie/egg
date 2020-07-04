@@ -95,6 +95,9 @@ TODO: read thread should take in a peer*, not a peer
       this will allow the relationships in the tree to be symbolic
       the parent pointer can have its values changed in case the
       tree is restructured
+
+TODO: maybe add a welcome message when a new member joins
+      and an alert when a trust branch is disconnected/severed
 ----------------------------------------------------------------------------------------------
 each client will probably need
     - an accept() thread
@@ -300,7 +303,7 @@ void* read_peer_msg_thread(void* node_peer_v){
     while(1){
         if((b_read = read(np->p.sock, &header, sizeof(struct msg_header))) <= 0 ||
            (b_read = read(np->p.sock, buf, header.bufsz)) <= 0){
-            puts("peer removed");
+            /*puts("peer removed");*/
             if(peer_eq(np->p, np->n->parent)){
                 memset(&np->n->parent.addr, 0, sizeof(struct sockaddr_in));
                 np->n->parent.sock = -1;
@@ -381,7 +384,6 @@ void* accept_connections_thread(void* node_v){
         int fd = accept(n->sock, (struct sockaddr*)&addr, &addrlen);
         if(fd == -1)perror("accept()");
         insert_child(n, init_peer(fd, addr));
-        printf("accepted new conn at %i\n", fd);
     }
     return NULL;
 }
