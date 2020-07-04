@@ -126,12 +126,15 @@ each client will probably need
 #include <arpa/inet.h>
 
 #define PORT 8080
+
 #define MSGLEN 500
+#define NICKLEN 20
 
 typedef enum {ALERT = 0, TEXT}mtype;
 
 struct msg_header{
     mtype type;
+    char nick[NICKLEN];
     /* bufsz is ony used for TEXT mtypes
      * otherwise, a bufsz of sizeof(struct sockaddr_in)*2 is assumed
      */
@@ -240,22 +243,26 @@ struct peer init_peer(int sock, struct sockaddr_in addr){
     return ret;
 }
 
-_Bool spread_msg(struct node* n, int msglen, char* msg, int from_sock){
+/*_Bool spread_msg(struct node* n, int msglen, char* msg, int from_sock){*/
+_Bool spread_msg(struct node* n, struct msg_header header, char* msg, int from_sock){
     _Bool ret = 1;
-    struct msg_header header;
-    header.type = TEXT;
-    header.bufsz = msglen;
+    /*
+     *struct msg_header header;
+     *header.type = TEXT;
+     *header.bufsz = msglen;
+     */
     /*if(n->parent.sock != from_sock)send(n->parent.sock, msg, );*/
     if(n->parent.sock != from_sock){
         ret &= (send(n->parent.sock, &header, sizeof(struct msg_header), 0)
                 == sizeof(struct msg_header));
-        ret &= (send(n->parent.sock, msg, msglen, 0) == msglen);
+        /*ret &= (send(n->parent.sock, msg, msglen, 0) == msglen);*/
+        ret &= (send(n->parent.sock, msg, header.bufsz, 0) == header.bufsz);
     }
     for(int i = 0; i < n->n_children; ++i){
         if(n->children[i].sock == from_sock)continue;
         ret &= (send(n->children[i].sock, &header, sizeof(struct msg_header), 0)
                 == sizeof(struct msg_header));
-        ret &= (send(n->children[i].sock, msg, msglen, 0) == msglen);
+        ret &= (send(n->children[i].sock, msg, header.bufsz, 0) == header.bufsz);
     }
     return ret;
 }
@@ -292,9 +299,11 @@ void* read_peer_msg_thread(void* node_peer_v){
             }
         }
         buf[b_read] = 0;
-        /* handle b_read != sizeof(struct msg_header) */
-        puts(buf);
-        spread_msg(np->n, b_read, buf, np->p.sock);
+        /* TODO: handle b_read != sizeof(struct msg_header) */
+        /* TODO: handle b_read != header.bufsz */
+        printf("%s: \"%s\"\n", header.nick, buf);
+        /*spread_msg(np->n, b_read, buf, np->p.sock);*/
+        spread_msg(np->n, header, buf, np->p.sock);
         /* TODO: pop it in mq */
     }
 }
@@ -404,8 +413,15 @@ int main(int a, char** b){
     }
 
     char buf[MSGLEN];
+
+    struct msg_header header;
+    memcpy(header.nick, b[1], NICKLEN-1);
+    header.nick[NICKLEN-1] = 0;
+
     while(1){
-        spread_msg(&n, read_stdin(buf), buf, n.sock);
+        header.bufsz = read_stdin(buf);
+        if(!header.bufsz)continue;
+        spread_msg(&n, header, buf, n.sock);
     }
 
     pthread_join(accept_th, NULL);
