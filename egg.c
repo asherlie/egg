@@ -240,6 +240,26 @@ struct peer init_peer(int sock, struct sockaddr_in addr){
     return ret;
 }
 
+_Bool spread_msg(struct node* n, int msglen, char* msg, int from_sock){
+    _Bool ret = 1;
+    struct msg_header header;
+    header.type = TEXT;
+    header.bufsz = msglen;
+    /*if(n->parent.sock != from_sock)send(n->parent.sock, msg, );*/
+    if(n->parent.sock != from_sock){
+        ret &= (send(n->parent.sock, &header, sizeof(struct msg_header), 0)
+                == sizeof(struct msg_header));
+        ret &= (send(n->parent.sock, msg, msglen, 0) == msglen);
+    }
+    for(int i = 0; i < n->n_children; ++i){
+        if(n->children[i].sock == from_sock)continue;
+        ret &= (send(n->children[i].sock, &header, sizeof(struct msg_header), 0)
+                == sizeof(struct msg_header));
+        ret &= (send(n->children[i].sock, msg, msglen, 0) == msglen);
+    }
+    return ret;
+}
+
 _Bool peer_eq(struct peer x, struct peer y){
     return (x.sock == y.sock && x.addr.sin_addr.s_addr == y.addr.sin_addr.s_addr);
 }
@@ -273,8 +293,8 @@ void* read_peer_msg_thread(void* node_peer_v){
         }
         buf[b_read] = 0;
         /* handle b_read != sizeof(struct msg_header) */
-        printf("br: %i\n", b_read);
-        /*puts(buf);*/
+        puts(buf);
+        spread_msg(np->n, b_read, buf, np->p.sock);
         /* TODO: pop it in mq */
     }
 }
@@ -316,26 +336,6 @@ _Bool join_tree(struct node* n, struct sockaddr_in addr){
 
 /* node operations end */
 
-_Bool spread_msg(struct node* n, int msglen, char* msg, int from_sock){
-    _Bool ret = 1;
-    struct msg_header header;
-    header.type = TEXT;
-    header.bufsz = msglen;
-    /*if(n->parent.sock != from_sock)send(n->parent.sock, msg, );*/
-    if(n->parent.sock != from_sock){
-        ret &= (send(n->parent.sock, &header, sizeof(struct msg_header), 0)
-                == sizeof(struct msg_header));
-        ret &= (send(n->parent.sock, msg, msglen, 0) == msglen);
-    }
-    for(int i = 0; i < n->n_children; ++i){
-        if(n->children[i].sock == from_sock)continue;
-        ret &= (send(n->children[i].sock, &header, sizeof(struct msg_header), 0)
-                == sizeof(struct msg_header));
-        ret &= (send(n->children[i].sock, msg, msglen, 0) == msglen);
-    }
-    return ret;
-}
-
 void* accept_connections_thread(void* node_v){
     struct node* n = node_v;
 
@@ -366,6 +366,17 @@ struct sockaddr_in strtoip(char* ip){
     return ret;
 }
 
+int read_stdin(char* buf){
+    int i;
+    char c;
+    for(i = 0; i < MSGLEN-1; ++i){
+        if((c = getc(stdin)) == EOF || c == '\n')break;
+        buf[i] = c;
+    }
+    buf[i+1] = 0;
+    return i;
+}
+
 /* TODO: 
  * use INADDR_ANY to simplify use
  */
@@ -391,6 +402,12 @@ int main(int a, char** b){
         struct sockaddr_in addr = strtoip(b[3]);
         if(!join_tree(&n, addr))puts("failed to connect");
     }
+
+    char buf[MSGLEN];
+    while(1){
+        spread_msg(&n, read_stdin(buf), buf, n.sock);
+    }
+
     pthread_join(accept_th, NULL);
     return 0;
 }
