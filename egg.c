@@ -130,6 +130,17 @@ each client will probably need
 #define MSGLEN 500
 #define NICKLEN 20
 
+#ifdef COLOR_SUPPORT
+#define ANSI_RED     "\x1b[31m"
+#define ANSI_GREEN   "\x1b[32m"
+#define ANSI_YELLOW  "\x1b[33m"
+#define ANSI_BLUE    "\x1b[34m"
+#define ANSI_MAGENTA "\x1b[35m"
+#define ANSI_CYAN    "\x1b[36m"
+#define ANSI_RESET   "\x1b[0m"
+#endif
+
+
 typedef enum {ALERT = 0, TEXT}mtype;
 
 struct msg_header{
@@ -190,6 +201,7 @@ struct peer{
 
 struct node{
     volatile _Bool active;
+    pthread_mutex_t children_lock;
     int sock, n_children, children_cap;
     /* parent is the peer we've connected to directly to join the network */
 
@@ -210,6 +222,7 @@ struct node_peer{
 void init_node(struct node* n, struct sockaddr_in local_addr){
 /*void init_node(struct node* n){*/
     mq_init(n->mq);
+    pthread_mutex_init(&n->children_lock, NULL);
     if((n->sock = socket(AF_INET, SOCK_STREAM, 0)) == -1)perror("socket()");
     /*
      *struct sockaddr_in addr = {0};
@@ -234,6 +247,7 @@ void init_node(struct node* n, struct sockaddr_in local_addr){
     memset(&n->parent, 0, sizeof(struct peer));
     n->children = malloc(sizeof(struct peer)*n->children_cap);
     n->active = 1;
+    n->parent.sock = -1;
 }
 
 struct peer init_peer(int sock, struct sockaddr_in addr){
@@ -258,12 +272,14 @@ _Bool spread_msg(struct node* n, struct msg_header header, char* msg, int from_s
         /*ret &= (send(n->parent.sock, msg, msglen, 0) == msglen);*/
         ret &= (send(n->parent.sock, msg, header.bufsz, 0) == header.bufsz);
     }
+    pthread_mutex_lock(&n->children_lock);
     for(int i = 0; i < n->n_children; ++i){
         if(n->children[i].sock == from_sock)continue;
         ret &= (send(n->children[i].sock, &header, sizeof(struct msg_header), 0)
                 == sizeof(struct msg_header));
         ret &= (send(n->children[i].sock, msg, header.bufsz, 0) == header.bufsz);
     }
+    pthread_mutex_unlock(&n->children_lock);
     return ret;
 }
 
@@ -290,18 +306,27 @@ void* read_peer_msg_thread(void* node_peer_v){
                 np->n->parent.sock = -1;
                 return NULL;
             }
+            pthread_mutex_lock(&np->n->children_lock);
             for(int i = 0; i < np->n->n_children; ++i){
                 if(peer_eq(np->p, np->n->children[i])){
                     memset(&np->n->children[i].addr, 0, sizeof(struct sockaddr_in));
                     np->n->children[i].sock = -1;
+                    memmove(np->n->children+i, np->n->children+i+1, 
+                            (np->n->n_children-i-1)*sizeof(struct peer));
+                    pthread_mutex_unlock(&np->n->children_lock);
                     return NULL;
                 }
             }
+            pthread_mutex_unlock(&np->n->children_lock);
         }
         buf[b_read] = 0;
         /* TODO: handle b_read != sizeof(struct msg_header) */
         /* TODO: handle b_read != header.bufsz */
+        #ifdef COLOR_SUPPORT
+        printf("%s%s%s: \"%s\"\n", ANSI_BLUE, header.nick, ANSI_RESET, buf);
+        #else
         printf("%s: \"%s\"\n", header.nick, buf);
+        #endif
         /*spread_msg(np->n, b_read, buf, np->p.sock);*/
         spread_msg(np->n, header, buf, np->p.sock);
         /* TODO: pop it in mq */
@@ -386,6 +411,15 @@ int read_stdin(char* buf){
     return i;
 }
 
+void p_welcome(char* nick){
+    printf("welcome to EGG, ");
+    #ifdef COLOR_SUPPORT
+    printf("%s%s%s\n", ANSI_RED, nick, ANSI_RESET);
+    #else
+    printf("%s\n", nick);
+    #endif
+}
+
 /* TODO: 
  * use INADDR_ANY to simplify use
  */
@@ -417,6 +451,8 @@ int main(int a, char** b){
     struct msg_header header;
     memcpy(header.nick, b[1], NICKLEN-1);
     header.nick[NICKLEN-1] = 0;
+
+    p_welcome(header.nick);
 
     while(1){
         header.bufsz = read_stdin(buf);
