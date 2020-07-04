@@ -83,7 +83,13 @@ once parent disconnects, child connects to grandparent
 what if parent is the root?:
 then the child is informed of its sibling
 
+----------------------------------------------------------------------------------------------
+TODO: each user should be able to specify max amount of connections
+      they will accept
+      any connections past this will not be accept()ed
 
+TODO: add a thread that constantly sends a connected alert
+      this lets each user know who is connected
 ----------------------------------------------------------------------------------------------
 each client will probably need
     - an accept() thread
@@ -113,6 +119,7 @@ each client will probably need
 #include <arpa/inet.h>
 
 #define PORT 8080
+#define MSGLEN 500
 
 struct peer{
     struct sockaddr_in addr;
@@ -123,6 +130,10 @@ struct node{
     volatile _Bool active;
     int sock, n_children, children_cap;
     /* parent is the peer we've connected to directly to join the network */
+
+    /* TODO: should likely be
+     * struct peer* parent, ** children;
+     */
     struct peer parent, * children;
 };
 
@@ -134,6 +145,45 @@ struct msg_header{
      * otherwise, a bufsz of sizeof(struct sockaddr_in)*2 is assumed
      */
     int bufsz;
+};
+
+/* message queue */
+
+struct mq_msg{
+    struct msg_header mh;
+    /* should this be dynamically allocated? */
+    char txt[MSGLEN];
+};
+
+struct msgqueue{
+    pthread_mutex_t mq_lock;
+    struct mq_msg* msgs;
+    int n_msgs, msg_cap;
+};
+
+void mq_init(struct msgqueue* mq){
+    pthread_mutex_init(&mq->mq_lock, NULL);
+    mq->n_msgs = 0;
+    mq->msg_cap = 500;
+    mq->msgs = malloc(sizeof(struct mq_msg)*mq->msg_cap);
+}
+
+void mq_insert(struct msgqueue* mq, struct mq_msg msg){
+    pthread_mutex_lock(&mq->mq_lock);
+    if(mq->n_msgs == mq->msg_cap){
+        mq->msg_cap *= 2;
+        mq->msgs = realloc(mq->msgs, mq->msg_cap);
+    }
+    mq->msgs[mq->n_msgs++] = msg;
+    pthread_mutex_unlock(&mq->mq_lock);
+}
+
+/* message queue end */
+
+struct node_peer_mq{
+    struct node* n;
+    struct peer/* * */ p;
+    struct msgqueue* mq;
 };
 
 /* node operations */
@@ -238,6 +288,36 @@ pthread_t spawn_accept_connections_thread(struct node* n){
     return pth;
 }
 
+_Bool peer_eq(struct peer x, struct peer y){
+    return (x.sock == y.sock && x.addr.sin_addr.s_addr == y.addr.sin_addr.s_addr);
+}
+/* a thread is spawned for each new accepted peer */
+/*data needs to be added to some kind of buffer*/
+/*data will be limited to MSGLEN bytes*/
+void* read_peer_msg_thread(void* node_peer_mq_v){
+    struct node_peer_mq* npm = node_peer_mq_v;
+
+    struct msg_header header;
+    int b_read;
+    while(1){
+        if((b_read = read(npm->p.sock, &header, sizeof(struct msg_header))) == -1){
+            if(peer_eq(npm->p, npm->n->parent)){
+                memset(&npm->n->parent.addr, 0, sizeof(struct sockaddr_in));
+                npm->n->parent.sock = -1;
+                return NULL;
+            }
+            for(int i = 0; i < npm->n->n_children; ++i){
+                if(peer_eq(npm->p, npm->n->children[i])){
+                    memset(&npm->n->children[i].addr, 0, sizeof(struct sockaddr_in));
+                    npm->n->children[i].sock = -1;
+                    return NULL;
+                }
+            }
+        }
+        /* handle b_read != sizeof(struct msg_header) */
+    }
+}
+
 struct sockaddr_in strtoip(char* ip){
     struct sockaddr_in ret = {0};
     ret.sin_port = htons(PORT);
@@ -259,6 +339,7 @@ int main(int a, char** b){
         return EXIT_FAILURE;
     }
     struct node n;
+    /* TODO: if *b[2] == '_', use INADDR_ANY */
     init_node(&n, strtoip(b[2]));
     /*init_node(&n);*/
     pthread_t accept_th = spawn_accept_connections_thread(&n);
