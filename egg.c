@@ -172,7 +172,7 @@ void mq_insert(struct msgqueue* mq, struct mq_msg msg){
     pthread_mutex_lock(&mq->mq_lock);
     if(mq->n_msgs == mq->msg_cap){
         mq->msg_cap *= 2;
-        mq->msgs = realloc(mq->msgs, mq->msg_cap);
+        mq->msgs = realloc(mq->msgs, sizeof(struct mq_msg)*mq->msg_cap);
     }
     mq->msgs[mq->n_msgs++] = msg;
     pthread_mutex_unlock(&mq->mq_lock);
@@ -234,7 +234,7 @@ struct peer init_peer(int sock, struct sockaddr_in addr){
 void insert_child(struct node* n, struct peer p){
     if(n->n_children == n->children_cap){
         n->children_cap *= 2;
-        n->children = realloc(n->children, n->children_cap);
+        n->children = realloc(n->children, sizeof(struct peer)*n->children_cap);
     }
     n->children[n->n_children++] = p;
 }
@@ -307,8 +307,11 @@ void* read_peer_msg_thread(void* node_peer_mq_v){
 
     struct msg_header header;
     int b_read;
+    
+    char buf[MSGLEN];
     while(1){
-        if((b_read = read(npm->p.sock, &header, sizeof(struct msg_header))) == -1){
+        if((b_read = read(npm->p.sock, &header, sizeof(struct msg_header))) == -1 ||
+           (b_read = read(npm->p.sock, buf, header.bufsz)) == -1){
             if(peer_eq(npm->p, npm->n->parent)){
                 memset(&npm->n->parent.addr, 0, sizeof(struct sockaddr_in));
                 npm->n->parent.sock = -1;
@@ -322,8 +325,22 @@ void* read_peer_msg_thread(void* node_peer_mq_v){
                 }
             }
         }
+        buf[b_read] = 0;
         /* handle b_read != sizeof(struct msg_header) */
+        puts(buf);
+        /* TODO: pop it in mq */
     }
+}
+
+pthread_t spawn_read_peer_msg_thread(struct node* n, struct peer p, struct msgqueue* mq){
+    struct node_peer_mq* npm = malloc(sizeof(struct node_peer_mq));
+    npm->n = n;
+    npm->p = p;
+    npm->mq = mq;
+
+    pthread_t pth;
+    pthread_create(&pth, NULL, read_peer_msg_thread, (void*)npm);
+    return pth;
 }
 
 struct sockaddr_in strtoip(char* ip){
