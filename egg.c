@@ -90,11 +90,18 @@ TODO: each user should be able to specify max amount of connections
 
 TODO: add a thread that constantly sends a connected alert
       this lets each user know who is connected
+
+TODO: read thread should take in a peer*, not a peer
+      this will allow the relationships in the tree to be symbolic
+      the parent pointer can have its values changed in case the
+      tree is restructured
 ----------------------------------------------------------------------------------------------
 each client will probably need
     - an accept() thread
     - a read() thread, spawned by accept() thread
           all reads can be blocking
+              there should be read threads for each accept()ed peer,
+              and the parent after joining
     - a thread that monitors the connection status of the current parent peer
           this is the thread that will maintain the structure of the graph
           we ONLY need to monitor parent, if a child disconnects, it''s on
@@ -120,22 +127,6 @@ each client will probably need
 
 #define PORT 8080
 #define MSGLEN 500
-
-struct peer{
-    struct sockaddr_in addr;
-    int sock;
-};
-
-struct node{
-    volatile _Bool active;
-    int sock, n_children, children_cap;
-    /* parent is the peer we've connected to directly to join the network */
-
-    /* TODO: should likely be
-     * struct peer* parent, ** children;
-     */
-    struct peer parent, * children;
-};
 
 typedef enum {ALERT = 0, TEXT}mtype;
 
@@ -188,16 +179,34 @@ struct mq_msg mq_pop(struct msgqueue* mq){
 
 /* message queue end */
 
-struct node_peer_mq{
+
+struct peer{
+    struct sockaddr_in addr;
+    int sock;
+};
+
+struct node{
+    volatile _Bool active;
+    int sock, n_children, children_cap;
+    /* parent is the peer we've connected to directly to join the network */
+
+    /* TODO: should likely be
+     * struct peer* parent, ** children;
+     */
+    struct peer parent, * children;
+    struct msgqueue* mq;
+};
+
+struct node_peer{
     struct node* n;
     struct peer/* * */ p;
-    struct msgqueue* mq;
 };
 
 /* node operations */
 
 void init_node(struct node* n, struct sockaddr_in local_addr){
 /*void init_node(struct node* n){*/
+    mq_init(n->mq);
     if((n->sock = socket(AF_INET, SOCK_STREAM, 0)) == -1)perror("socket()");
     /*
      *struct sockaddr_in addr = {0};
@@ -231,12 +240,63 @@ struct peer init_peer(int sock, struct sockaddr_in addr){
     return ret;
 }
 
+_Bool peer_eq(struct peer x, struct peer y){
+    return (x.sock == y.sock && x.addr.sin_addr.s_addr == y.addr.sin_addr.s_addr);
+}
+
+/* a thread is spawned for each new accepted peer */
+/*data needs to be added to some kind of buffer*/
+/*data will be limited to MSGLEN bytes*/
+void* read_peer_msg_thread(void* node_peer_v){
+    struct node_peer* np = node_peer_v;
+
+    struct msg_header header;
+    int b_read;
+    
+    char buf[MSGLEN];
+    while(1){
+        if((b_read = read(np->p.sock, &header, sizeof(struct msg_header))) <= 0 ||
+           (b_read = read(np->p.sock, buf, header.bufsz)) <= 0){
+            puts("peer removed");
+            if(peer_eq(np->p, np->n->parent)){
+                memset(&np->n->parent.addr, 0, sizeof(struct sockaddr_in));
+                np->n->parent.sock = -1;
+                return NULL;
+            }
+            for(int i = 0; i < np->n->n_children; ++i){
+                if(peer_eq(np->p, np->n->children[i])){
+                    memset(&np->n->children[i].addr, 0, sizeof(struct sockaddr_in));
+                    np->n->children[i].sock = -1;
+                    return NULL;
+                }
+            }
+        }
+        buf[b_read] = 0;
+        /* handle b_read != sizeof(struct msg_header) */
+        printf("br: %i\n", b_read);
+        /*puts(buf);*/
+        /* TODO: pop it in mq */
+    }
+}
+
+pthread_t spawn_read_peer_msg_thread(struct node* n, struct peer p){
+    struct node_peer* np = malloc(sizeof(struct node_peer));
+    np->n = n;
+    np->p = p;
+
+    pthread_t pth;
+    pthread_create(&pth, NULL, read_peer_msg_thread, (void*)np);
+
+    return pth;
+}
+
 void insert_child(struct node* n, struct peer p){
     if(n->n_children == n->children_cap){
         n->children_cap *= 2;
         n->children = realloc(n->children, sizeof(struct peer)*n->children_cap);
     }
     n->children[n->n_children++] = p;
+    spawn_read_peer_msg_thread(n, p);
 }
 
 /* TODO: we'll need to lock a mutex lock when altering structure
@@ -248,7 +308,9 @@ _Bool join_tree(struct node* n, struct sockaddr_in addr){
     int sock = socket(AF_INET, SOCK_STREAM, 0);
     _Bool ret = !connect(sock, (struct sockaddr*)&addr, sizeof(struct sockaddr_in));
     if(!ret)perror("connect()");
+    n->parent.addr = addr;
     n->parent.sock = sock;
+    spawn_read_peer_msg_thread(n, n->parent);
     return ret;
 }
 
@@ -296,53 +358,6 @@ pthread_t spawn_accept_connections_thread(struct node* n){
     return pth;
 }
 
-_Bool peer_eq(struct peer x, struct peer y){
-    return (x.sock == y.sock && x.addr.sin_addr.s_addr == y.addr.sin_addr.s_addr);
-}
-/* a thread is spawned for each new accepted peer */
-/*data needs to be added to some kind of buffer*/
-/*data will be limited to MSGLEN bytes*/
-void* read_peer_msg_thread(void* node_peer_mq_v){
-    struct node_peer_mq* npm = node_peer_mq_v;
-
-    struct msg_header header;
-    int b_read;
-    
-    char buf[MSGLEN];
-    while(1){
-        if((b_read = read(npm->p.sock, &header, sizeof(struct msg_header))) == -1 ||
-           (b_read = read(npm->p.sock, buf, header.bufsz)) == -1){
-            if(peer_eq(npm->p, npm->n->parent)){
-                memset(&npm->n->parent.addr, 0, sizeof(struct sockaddr_in));
-                npm->n->parent.sock = -1;
-                return NULL;
-            }
-            for(int i = 0; i < npm->n->n_children; ++i){
-                if(peer_eq(npm->p, npm->n->children[i])){
-                    memset(&npm->n->children[i].addr, 0, sizeof(struct sockaddr_in));
-                    npm->n->children[i].sock = -1;
-                    return NULL;
-                }
-            }
-        }
-        buf[b_read] = 0;
-        /* handle b_read != sizeof(struct msg_header) */
-        puts(buf);
-        /* TODO: pop it in mq */
-    }
-}
-
-pthread_t spawn_read_peer_msg_thread(struct node* n, struct peer p, struct msgqueue* mq){
-    struct node_peer_mq* npm = malloc(sizeof(struct node_peer_mq));
-    npm->n = n;
-    npm->p = p;
-    npm->mq = mq;
-
-    pthread_t pth;
-    pthread_create(&pth, NULL, read_peer_msg_thread, (void*)npm);
-    return pth;
-}
-
 struct sockaddr_in strtoip(char* ip){
     struct sockaddr_in ret = {0};
     ret.sin_port = htons(PORT);
@@ -363,7 +378,11 @@ int main(int a, char** b){
                *b, *b);
         return EXIT_FAILURE;
     }
+
+    struct msgqueue MQ;
     struct node n;
+    n.mq = &MQ;
+
     /* TODO: if *b[2] == '_', use INADDR_ANY */
     init_node(&n, strtoip(b[2]));
     /*init_node(&n);*/
