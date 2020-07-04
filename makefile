@@ -1,5 +1,5 @@
 CC=gcc
-CFLAGS=-Wall -Wextra -Werror -pthread
+CFLAGS=-Wall -Wextra -Werror -pthread -DCOLOR_SUPPORT
 
 all: egg
 egg: egg.c
