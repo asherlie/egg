@@ -28,6 +28,17 @@ f -> b
    /|\
   d f e
 
+tenents of EGG
+    EGG is a network of hierarchical trust
+    there is no persistence of data
+    nothing is stored
+    there is no user that is more privileged than any other user
+
+    EGG lets users be bridges between two 
+    one node can connect many users who only have the one point of connection
+    this lets one user vouch for many
+    there is no way for a user to get the ip address of somebody
+    that they are talking to through somebody that both parties know
 
 maybe there is a manual mend command
 that bridges the gap
@@ -189,7 +200,8 @@ void mq_insert(struct msgqueue* mq, struct mq_msg msg){
 struct mq_msg mq_pop(struct msgqueue* mq){
     pthread_mutex_lock(&mq->mq_lock);
     /* TODO: messages should be popped from beginning */
-    struct mq_msg ret = mq->msgs[--mq->n_msgs];
+    struct mq_msg ret = {0};
+    if(mq->n_msgs)ret = mq->msgs[--mq->n_msgs];
     pthread_mutex_unlock(&mq->mq_lock);
     return ret;
 }
@@ -307,7 +319,15 @@ void* read_peer_msg_thread(void* node_peer_v){
             }
             pthread_mutex_unlock(&np->n->children_lock);
         }
+
         buf[b_read] = 0;
+        /*
+         * struct mq_msg mqm;
+         * mqm.mh = header;
+         * memcpy(mqm.txt, buf, b_read);
+         * mq_insert(np->n->mq, mqm);
+        */
+
         /* TODO: handle b_read != sizeof(struct msg_header) */
         /* TODO: handle b_read != header.bufsz */
         #ifdef COLOR_SUPPORT
@@ -330,6 +350,20 @@ pthread_t spawn_read_peer_msg_thread(struct node* n, struct peer p){
     pthread_create(&pth, NULL, read_peer_msg_thread, (void*)np);
 
     return pth;
+}
+
+void* pop_mq_thread(void* mq_v){
+    struct msgqueue* mq = mq_v;
+    while(1){
+        struct mq_msg m = mq_pop(mq);
+        if(!m.mh.nick[0]){usleep(100);continue;}
+        printf("%s\n", m.txt);
+        /*
+         * everything's gotta be a pointer
+         * need to be able to return NULL
+        */
+    }
+    return NULL;
 }
 
 void insert_child(struct node* n, struct peer p){
@@ -450,6 +484,10 @@ int main(int a, char** b){
     header.nick[NICKLEN-1] = 0;
 
     p_welcome(header.nick);
+    /*
+     * pthread_t iff;
+     * pthread_create(&iff, NULL, pop_mq_thread, n.mq);
+    */
 
     while(1){
         header.bufsz = read_stdin(buf);
