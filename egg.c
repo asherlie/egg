@@ -533,8 +533,10 @@ struct peer{
 
 struct node{
     volatile _Bool active;
-    pthread_mutex_t children_lock;
-    int sock, n_children, children_cap;
+    pthread_mutex_t children_lock,
+                    expected_paths_lock;
+    int sock, n_children, children_cap,
+        expected_paths;
 
     char nick[NICKLEN];
     /* parent is the peer we've connected to directly to join the network */
@@ -560,6 +562,7 @@ void init_node(struct node* n, char* nick, struct sockaddr_in local_addr){
 
     mq_init(n->mq);
     pthread_mutex_init(&n->children_lock, NULL);
+    pthread_mutex_init(&n->expected_paths_lock, NULL);
     if((n->sock = socket(AF_INET, SOCK_STREAM, 0)) == -1)perror("socket()");
     int tr = 1;
     if(setsockopt(n->sock, SOL_SOCKET, SO_REUSEADDR, &tr, sizeof(int)) == -1)perror("setsockopt()");
@@ -645,6 +648,90 @@ _Bool peer_eq(struct peer x, struct peer y){
     return (x.sock == y.sock && x.addr.sin_addr.s_addr == y.addr.sin_addr.s_addr);
 }
 
+void handle_msg(struct node_peer* np, struct msg_header header, char* buf){
+    switch(header.type){
+        case TEXT:
+            #ifdef COLOR_SUPPORT
+            printf("%s%s%s: \"%s\"\n", ANSI_BLUE, header.nick, ANSI_RESET, buf);
+            #else
+            printf("%s: \"%s\"\n", header.nick, buf);
+            #endif
+            spread_msg(np->n, header, buf, np->p.sock);
+            break;
+        case HIER_REQ:
+            puts("got HIER_REQ, testing leafiness...");
+            if(is_leaf(np->n)){
+                puts("we've been reached :)  a leaf");
+                struct msg_header pu_h;
+                pu_h.type = N_PASS_UP_ALERT;
+                pu_h.bufsz = 1;
+                char spoof;
+                /* else? */pass_msg_up(np->n, pu_h, &spoof, np->n->sock);
+                puts("passed up N_PASS_UP_ALERT");
+
+                /* give a little time */
+                usleep(100);
+                pu_h.type = NICK_ALERT;
+                /* we're not using NICKLEN because we need
+                 * to fit many nicks
+                 */
+                pu_h.bufsz = strlen(np->n->nick)+1;
+                char tmp_buf[MSGLEN] = {0};
+                sprintf(tmp_buf, "%s,", np->n->nick);
+                pass_msg_up(np->n, pu_h, tmp_buf, np->n->sock);
+                break;
+            }
+            puts("expected paths set to 0");
+            pthread_mutex_lock(&np->n->expected_paths_lock);
+            np->n->expected_paths = 0;
+            pthread_mutex_unlock(&np->n->expected_paths_lock);
+            /*
+             * else if(is_root(np->n)){
+             *     expected_paths = 0;
+             * }
+            */
+            /* *buf == 'z' when sender is
+             * a leaf
+             * and we must ensure that they
+             * end up with a HIER_REQ
+             */
+            if(*buf == 'z'){
+                *buf = 'a';
+                spread_msg(np->n, header, buf, -1);
+            }
+            else spread_msg(np->n, header, buf, np->p.sock);
+            break;
+        case N_PASS_UP_ALERT:
+            if(is_root(np->n)){
+                pthread_mutex_lock(&np->n->expected_paths_lock);
+                printf("incrementing expected paths from %i to %i\n",
+                       np->n->expected_paths, np->n->expected_paths+1);
+                ++np->n->expected_paths;
+                pthread_mutex_unlock(&np->n->expected_paths_lock);
+                break;
+            }
+            pass_msg_up(np->n, header, buf, np->p.sock);
+            break;
+        case NICK_ALERT:
+            /* TODO: is_root() return should be stored up top */
+            if(is_root(np->n)){
+                /*gotta combine it all until expected_paths is reached*/
+                pthread_mutex_lock(&np->n->expected_paths_lock);
+                printf("expecting %i strings, got our string: %s\n", np->n->expected_paths, buf);
+                pthread_mutex_unlock(&np->n->expected_paths_lock);
+            }
+            else{
+                struct msg_header pu_h;
+                pu_h.type = NICK_ALERT;
+                /* lol */
+                char tmp_buf[MSGLEN*100] = {0};
+                sprintf(tmp_buf, "%s,%s", np->n->nick, buf);
+                pass_msg_up(np->n, pu_h, tmp_buf, np->p.sock);
+            }
+        default:{;}
+    }
+}
+
 /* a thread is spawned for each new accepted peer */
 /*data needs to be added to some kind of buffer*/
 /*data will be limited to MSGLEN bytes*/
@@ -652,7 +739,7 @@ void* read_peer_msg_thread(void* node_peer_v){
     struct node_peer* np = node_peer_v;
 
     struct msg_header header;
-    int b_read, expected_paths;
+    int b_read;
     
     char buf[MSGLEN];
     while(1){
@@ -669,9 +756,9 @@ void* read_peer_msg_thread(void* node_peer_v){
                 if(peer_eq(np->p, np->n->children[i])){
                     memset(&np->n->children[i].addr, 0, sizeof(struct sockaddr_in));
                     np->n->children[i].sock = -1;
-                    /* TODO: this is misaligning the buffer */
                     memmove(np->n->children+i, np->n->children+i+1, 
                             (np->n->n_children-i-1)*sizeof(struct peer));
+                    --np->n->n_children;
                     pthread_mutex_unlock(&np->n->children_lock);
                     return NULL;
                 }
@@ -680,6 +767,8 @@ void* read_peer_msg_thread(void* node_peer_v){
         }
 
         buf[b_read] = 0;
+
+        handle_msg(np, header, buf); 
         /*
          * struct mq_msg mqm;
          * mqm.mh = header;
@@ -689,76 +778,6 @@ void* read_peer_msg_thread(void* node_peer_v){
 
         /* TODO: handle b_read != sizeof(struct msg_header) */
         /* TODO: handle b_read != header.bufsz */
-        switch(header.type){
-            case TEXT:
-                #ifdef COLOR_SUPPORT
-                printf("%s%s%s: \"%s\"\n", ANSI_BLUE, header.nick, ANSI_RESET, buf);
-                #else
-                printf("%s: \"%s\"\n", header.nick, buf);
-                #endif
-                spread_msg(np->n, header, buf, np->p.sock);
-                break;
-            case HIER_REQ:
-                puts("got HIER_REQ, testing leafiness...");
-                if(is_leaf(np->n)){
-                    puts("we've been reached :)  a leaf");
-                    struct msg_header pu_h;
-                    pu_h.type = N_PASS_UP_ALERT;
-                    pu_h.bufsz = 1;
-                    char spoof;
-                    /* else? */pass_msg_up(np->n, pu_h, &spoof, np->n->sock);
-
-                    /* give a little time */
-                    usleep(100);
-                    pu_h.type = NICK_ALERT;
-                    /* we're not using NICKLEN because we need
-                     * to fit many nicks
-                     */
-                    pu_h.bufsz = strlen(np->n->nick)+1;
-                    char tmp_buf[MSGLEN] = {0};
-                    sprintf(tmp_buf, "%s,", np->n->nick);
-                    pass_msg_up(np->n, pu_h, tmp_buf, np->n->sock);
-                    break;
-                }
-                expected_paths = 0;
-                /*
-                 * else if(is_root(np->n)){
-                 *     expected_paths = 0;
-                 * }
-                */
-                /* *buf == 'z' when sender is
-                 * a leaf
-                 * and we must ensure that they
-                 * end up with a HIER_REQ
-                 */
-                if(*buf == 'z'){
-                    *buf = 'a';
-                    spread_msg(np->n, header, buf, -1);
-                }
-                else spread_msg(np->n, header, buf, np->p.sock);
-                break;
-            case N_PASS_UP_ALERT:
-                if(is_root(np->n)){
-                    ++expected_paths;
-                }
-                pass_msg_up(np->n, header, buf, np->p.sock);
-                break;
-            case NICK_ALERT:
-                /* TODO: is_root() return should be stored up top */
-                if(is_root(np->n)){
-                    /*gotta combine it all until expected_paths is reached*/
-                    printf("got our string: %s\n", buf);
-                }
-                else{
-                    struct msg_header pu_h;
-                    pu_h.type = NICK_ALERT;
-                    /* lol */
-                    char tmp_buf[MSGLEN*100] = {0};
-                    sprintf(tmp_buf, "%s,%s", np->n->nick, buf);
-                    pass_msg_up(np->n, pu_h, tmp_buf, np->p.sock);
-                }
-            default:{;}
-        }
 
         /*spread_msg(np->n, header, buf, np->p.sock);*/
         /* TODO: pop it in mq */
