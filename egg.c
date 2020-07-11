@@ -892,9 +892,12 @@ void p_welcome(char* nick){
     #endif
 }
 
-/* TODO: 
- * use INADDR_ANY to simplify use
- */
+_Bool remove_child(struct node* n, char* child_nick){
+    (void)n;
+    (void)child_nick;
+    return 0;
+}
+
 int main(int a, char** b){
     /* ./egg <nick> <local ip>
      * ./egg <nick> <local ip> <remote ip>
@@ -947,6 +950,20 @@ int main(int a, char** b){
         if(!header.bufsz)continue;
         if(*buf == '/'){
             switch(buf[1]){
+                /* kick */
+                case 'K':
+                case 'k':
+                    {
+                    char* child = strchr(buf, ' ');
+                    if(!child){
+                        puts("this command requires a nickname to kick");
+                        break;
+                    }
+                    ++child;
+                    if(!remove_child(&n, child))printf("no child matching \"%s\" was found\n", child);
+                    break;
+                    }
+                /* print */
                 case 'P':
                 case 'p':
                     init_diagram_request(&n);
