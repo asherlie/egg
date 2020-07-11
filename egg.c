@@ -900,16 +900,18 @@ void p_welcome(char* nick){
 /* we don't store nicks so child must be specified by ip */
 /*we now need a print_children() function to print our childrens' ip addresses*/
 _Bool remove_child(struct node* n, char* child_ip){
+    _Bool ret = 0;
     pthread_mutex_lock(&n->children_lock);
     struct sockaddr_in addr = strtoip(child_ip);
     for(int i = 0; i < n->n_children; ++i){
         if(n->children[i].addr.sin_addr.s_addr == addr.sin_addr.s_addr){
             remove_node(n, i);
+            ret = 1;
             break;
         }
     }
     pthread_mutex_unlock(&n->children_lock);
-    return 0;
+    return ret;
 }
 
 /* prints children and their IPs to FP */
