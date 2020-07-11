@@ -912,6 +912,20 @@ _Bool remove_child(struct node* n, char* child_ip){
     return 0;
 }
 
+/* prints children and their IPs to FP */
+/* TODO: nicks should also be printed, a single level pass down with spoofing
+ * children into thinking they are leaves should do the trick
+ */
+void print_children(struct node* n, FILE* fp){
+    pthread_mutex_lock(&n->children_lock);
+    fprintf(fp, "%i children connected:\n", n->n_children);
+    for(int i = 0; i < n->n_children; ++i){
+        char* ip_str = inet_ntoa(n->children[i].addr.sin_addr);
+        fprintf(fp, "  %i: %s\n", i, ip_str);
+    }
+    pthread_mutex_unlock(&n->children_lock);
+}
+
 int main(int a, char** b){
     /* ./egg <nick> <local ip>
      * ./egg <nick> <local ip> <remote ip>
