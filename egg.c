@@ -536,7 +536,7 @@ struct node{
     pthread_mutex_t children_lock,
                     expected_paths_lock;
     int sock, n_children, children_cap,
-        expected_paths;
+        expected_paths, paths_recvd;
 
     char nick[NICKLEN];
     /* parent is the peer we've connected to directly to join the network */
@@ -561,8 +561,10 @@ void init_node(struct node* n, char* nick, struct sockaddr_in local_addr){
     n->nick[NICKLEN-1] = 0;
 
     mq_init(n->mq);
+
     pthread_mutex_init(&n->children_lock, NULL);
     pthread_mutex_init(&n->expected_paths_lock, NULL);
+
     if((n->sock = socket(AF_INET, SOCK_STREAM, 0)) == -1)perror("socket()");
     int tr = 1;
     if(setsockopt(n->sock, SOL_SOCKET, SO_REUSEADDR, &tr, sizeof(int)) == -1)perror("setsockopt()");
@@ -681,9 +683,10 @@ void handle_msg(struct node_peer* np, struct msg_header header, char* buf){
                 pass_msg_up(np->n, pu_h, tmp_buf, np->n->sock);
                 break;
             }
-            puts("expected paths set to 0");
+            puts("expected_paths, paths_recvd set to 0");
             pthread_mutex_lock(&np->n->expected_paths_lock);
             np->n->expected_paths = 0;
+            np->n->paths_recvd = 0;
             pthread_mutex_unlock(&np->n->expected_paths_lock);
             /*
              * else if(is_root(np->n)){
@@ -740,7 +743,6 @@ void* read_peer_msg_thread(void* node_peer_v){
 
     struct msg_header header;
     int b_read;
-    
     char buf[MSGLEN];
     while(1){
         if((b_read = read(np->p.sock, &header, sizeof(struct msg_header))) <= 0 ||
