@@ -517,7 +517,8 @@ void mq_insert(struct msgqueue* mq, struct mq_msg msg){
 struct mq_msg mq_pop(struct msgqueue* mq){
     pthread_mutex_lock(&mq->mq_lock);
     /* TODO: messages should be popped from beginning */
-    struct mq_msg ret = {0};
+    struct mq_msg ret;
+    memset(&ret, 0, sizeof(struct mq_msg));
     if(mq->n_msgs)ret = mq->msgs[--mq->n_msgs];
     pthread_mutex_unlock(&mq->mq_lock);
     return ret;
@@ -713,6 +714,7 @@ void handle_msg(struct node_peer* np, struct msg_header header, char* buf){
                 pthread_mutex_unlock(&np->n->expected_paths_lock);
                 break;
             }
+            puts("doing my duty, PASSING UP CHILDRENS' NICK");
             pass_msg_up(np->n, header, buf, np->p.sock);
             break;
         case NICK_ALERT:
