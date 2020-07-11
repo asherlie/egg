@@ -996,6 +996,11 @@ int main(int a, char** b){
                 case 'p':
                     init_diagram_request(&n);
                     break;
+                case 'C':
+                case 'c':
+                    /* TODO: allow optionally writing to a file */
+                    print_children(&n, stdout);
+                    break;
             }
         }
         else spread_msg(&n, header, buf, n.sock);
