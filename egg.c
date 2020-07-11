@@ -731,6 +731,7 @@ void handle_msg(struct node_peer* np, struct msg_header header, char* buf){
                 /* lol */
                 char tmp_buf[MSGLEN*100] = {0};
                 sprintf(tmp_buf, "%s,%s", np->n->nick, buf);
+                pu_h.bufsz = strlen(tmp_buf);
                 pass_msg_up(np->n, pu_h, tmp_buf, np->p.sock);
                 printf("doing my duty, passing up childrens' nick along with mine: %s\n", tmp_buf);
             }
