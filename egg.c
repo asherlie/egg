@@ -714,7 +714,6 @@ void handle_msg(struct node_peer* np, struct msg_header header, char* buf){
                 pthread_mutex_unlock(&np->n->expected_paths_lock);
                 break;
             }
-            puts("doing my duty, PASSING UP CHILDRENS' NICK");
             pass_msg_up(np->n, header, buf, np->p.sock);
             break;
         case NICK_ALERT:
@@ -733,6 +732,7 @@ void handle_msg(struct node_peer* np, struct msg_header header, char* buf){
                 char tmp_buf[MSGLEN*100] = {0};
                 sprintf(tmp_buf, "%s,%s", np->n->nick, buf);
                 pass_msg_up(np->n, pu_h, tmp_buf, np->p.sock);
+                printf("doing my duty, passing up childrens' nick along with mine: %s\n", tmp_buf);
             }
         default:{;}
     }
