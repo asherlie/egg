@@ -720,7 +720,8 @@ void handle_msg(struct node_peer* np, struct msg_header header, char* buf){
             if(is_root(np->n)){
                 /*gotta combine it all until expected_paths is reached*/
                 pthread_mutex_lock(&np->n->expected_paths_lock);
-                printf("expecting %i strings, got our string: %s\n", np->n->expected_paths, buf);
+                ++np->n->paths_recvd;
+                printf("%i/%i strings recvd, got our string: %s\n", np->n->paths_recvd, np->n->expected_paths, buf);
                 pthread_mutex_unlock(&np->n->expected_paths_lock);
             }
             else{
