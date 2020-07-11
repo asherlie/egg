@@ -945,7 +945,14 @@ int main(int a, char** b){
     while(1){
         header.bufsz = read_stdin(buf);
         if(!header.bufsz)continue;
-        if(*buf == '/')init_diagram_request(&n);
+        if(*buf == '/'){
+            switch(buf[1]){
+                case 'P':
+                case 'p':
+                    init_diagram_request(&n);
+                    break;
+            }
+        }
         else spread_msg(&n, header, buf, n.sock);
     }
 
