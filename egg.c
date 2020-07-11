@@ -29,6 +29,45 @@ f -> b
   d f e
 
 tenents of EGG
+    
+    example tree:
+
+            a
+          / | \
+         b  c  d
+        /|
+       e f
+
+    terms: root   - first user - a is the root of the tree above
+           child  - b, c, and d are children of a in the tree above
+           parent - b is the parent of e and f in the tree above
+           leaf   - user with no children - e, f, c, and d are leaves
+                    in the tree above
+
+
+    ALL USERS ARE AWARE OF THE ENTIRE STRUCTURE OF THE NETWORK
+
+    ANY USER CAN KICK ANYONE THAT HAS CONECTED DIRECTLY TO THEM 
+    OFF OF THE NETWORK
+
+    THIS ESTABLISHES A SORT OF `HIERARCHY OF TRUST`
+    THE IMPLICIT MOST TRUSTED USER IS THE ONE WHO STARTED THE NETWORK
+
+    THE USERS THAT CONNECTED DIRECTLY TO THIS ONE ARE `VOUCHED FOR` BY
+    THE INITIAL USER - BOTH BECAUSE THEY ARE AWARE OF THE IP ADDRESS OF
+    THE INITIAL USER, AND BECAUSE THEY HAVE NOT BEEN KICKED BY THIS USER
+
+
+    THIS SYSTEM OF HIERARCHICAL TRUST EXTENDS TO THE LEAVES OF THE TREE
+
+    IF A MEMBER OF THE NETWORK IS UNDERSTOOD TO BE `UNTRUSTED`, WHATEVER
+    THAT MEANS, THEY CAN BE KICKED BY THEIR PARENT, AND ARE CUT OFF
+    FROM THE REST OF THE NETWORK
+    THIS WILL FRAGMENT THE NETWORK INTO TWO SEPARATE BUT FULLY FUNCTIONAL
+    NETWORKS EACH TIME IT OCCURS, SINCE THE BANISHED USER IS STILL IN
+    CONTACT WITH ALL OF IT''S CHILDREN, GRANDCHILDREN, ETC.
+
+
     EGG is a network of hierarchical trust
     there is no persistence of data
     nothing is stored
@@ -154,8 +193,286 @@ each client will probably need
 #define ANSI_RESET   "\x1b[0m"
 #endif
 
+#if !1
+we will add a new mtype - TS_REQUEST - tree structure
+this spreads throughout the network
+once the message reaches a leaf, it is no longer spread
+if(!n->n_children)
 
-typedef enum {ALERT = 0, TEXT}mtype;
+then the leaves do an upwards message
+send to parents only, recursively
+/*
+
+        a
+      / | \
+    /   |   \
+   |    |     \
+   b    |      c
+   |    d      | \
+   e           g   \
+              /      f
+            h
+          / |
+         j  i
+
+*/
+a,b,e
+a,d
+a,c,g,h,j
+a,c,g,h,i
+a,c,f
+
+squashes are dealt with first
+squash matching a
+        a
+       /|\
+
+squash matching c
+
+_,b,e
+_,d
+_,_,g,h,j
+_,_,g,h,i
+_,_,f
+
+        a
+       /|\
+      c
+
+squash matching g
+
+_,b,e
+_,d
+_,_,_,h,j
+_,_,_,h,i
+_,_,f
+
+        a
+       /|\
+      c
+    /
+   g
+
+squash matching h
+
+_,b,e
+_,d
+_,_,_,_,j
+_,_,_,_,i
+_,_,f
+
+            a
+           /|\
+          c
+         /
+       g
+     /
+   h
+
+matches will be in the same point in the order
+all `a`s wil line up
+as will `c`s, `g`, `h`
+
+go through looking for matches
+if paths[i] matches
+
+HUGE TODO:
+    any user can kick any one of their children off of the network
+------------
+REAL METHOD
+------------
+0. spread_msg() reaches leaves informing them that their action is requested
+1. leaves pass_up() message to let root know how many strings to expect
+2. leaves **maybe** usleep(100) to provide time for root to add up values
+3. root receives expected number of strings. this is stored
+4. leaves pass_up() their nickname to their parents
+5. when a node recieves a PASS_UP_DIAGRAM alert with a nick string, they
+   prepend (","++ their nickname) to the nick string before sending it along
+6. if there is nobody to pass nick string to:
+        if n_received < expected: append a '|' to 
+        else: we have our string. distribute it.
+------------
+REAL METHOD
+------------
+
+    asher - james
+    /   \
+maxime  eteri
+  |       |
+ nic     hannah
+            \
+            joel
+
+asher,maxime,nic,|asher,eteri,hannah,joel,|asher,james,|
+
+
+a,b,e|a,d|a,c,g,h,i|a,c,f|
+
+
+a-b-e
+^-d
+^-c-g-h-i
+^-^-f
+
+go thru each line one str at a time
+if it is the same as the string directly above it,
+print a '^'
+otherwise print the string
+
+then print a "-\n"
+
+a-b-e
+a-d
+a-c-g-h-i
+a-c-f
+
+a
+|-be
+|-d
+|-cghi
+|-f
+
+a
+ b
+ d
+ c
+
+struct pt{
+    char* nick;
+    struct pt* kk
+};
+
+a
+be d cghi cf
+        a
+       /|\
+     /  |  \
+   b    d    c
+
+e _ ghi f
+
+        a
+       /|\
+     /  |  \
+   b    d    c
+   |         |
+   e         g
+
+a----c---g--h--i
+| \
+b   \                               -
+|    d
+e
+
+abe|ad|acg|acf
+
+e passes up e
+b passes up be
+a recieves be
+a inserts a
+-- abe
+
+d passes up d
+a recieves d
+a inserts a
+-- ad
+
+g passes up g
+c recieves g
+c inserts c
+-- cg
+
+f passes up f
+c recieves f
+c inserts c
+-- cf
+
+c passes up cg
+a recieves cg
+a inserts a
+-- acg
+
+c passes up cf
+a recieves cf
+a inserts a
+-- acf
+
+a combines inputs to create full tree diagram
+-- abe|ad|acg|acf
+
+NOTE: this method relies upon the root node spreading the
+      tree diagram string around the network after it has
+      been generated
+      
+      this is relatively expensive as a single tree diagram
+      generation includes
+        requester initiates spread_msg, sets flag indicating
+        that a diagram has been requested - this node will
+        now pretty print the diagram when it is recieved
+        1 spread_msg to reach leaves
+        1 pass up from each node to communicate nicks
+        1 spread_msg to reach requester
+
+how does a parent know when all of its children have notified it?
+easy: each parent is aware of the number of childen it has
+until n_children nick notifications have been recieved, nothing
+will be passed up the tree
+
+but what about parents who have multiple messages from one child
+in the case of a-c, for example
+c could indicate that it is sending up 2 paths
+how does c know to wait for 2 paths?
+easy: it has 2 children
+
+b sends TS_REQUEST
+TS_REQUEST is ignored and passed along 
+until it reaches
+{e, d, g, f}
+
+{e, d, g, f}
+pass their nicknames up in the buf field
+NOTE: this is not a scalable solution - buf is limited to 500 bytes
+TODO: buf should be dynamically allocated
+
+// from leaf node
+init pass up PASS_UP_DIAGRAM:
+    pass_up(HEADS_UP_DIAGRAM 1)
+    /* wait for all heads up diagrams to be recieved */
+    usleep(1000);
+    pass_up(header.nick)
+
+from read():
+    if header.type == HEADS_UP_DIAGRAM:
+        expected_diag += n_expected;
+
+    if header.type == PASS_UP_DIAGRAM:
+        // build string before passing up
+        tmp_pass_str += (header.nick ++ sender.nick)|
+        pass_up(header.nick ++ sender.nick)
+        if()pass_up()
+
+e passes up "e"
+b passes up "b"
+a receives  "eb"
+
+d passes up "d"
+a recieves  "d"
+
+g passes up "g"
+
+f passes up "f"
+
+c combines g and f
+c passes up "cg|f"
+
+a recieves "g|f"
+
+a combines "eb|d|g|f"
+this does not work - g|f 
+
+#endif
+
+typedef enum {TEXT=0, HIER_REQ, N_PASS_UP_ALERT, NICK_ALERT}mtype;
 
 struct msg_header{
     mtype type;
@@ -218,6 +535,8 @@ struct node{
     volatile _Bool active;
     pthread_mutex_t children_lock;
     int sock, n_children, children_cap;
+
+    char nick[NICKLEN];
     /* parent is the peer we've connected to directly to join the network */
 
     /* TODO: should likely be
@@ -234,11 +553,16 @@ struct node_peer{
 
 /* node operations */
 
-void init_node(struct node* n, struct sockaddr_in local_addr){
+void init_node(struct node* n, char* nick, struct sockaddr_in local_addr){
 /*void init_node(struct node* n){*/
+    memcpy(n->nick, nick, NICKLEN-1);
+    n->nick[NICKLEN-1] = 0;
+
     mq_init(n->mq);
     pthread_mutex_init(&n->children_lock, NULL);
     if((n->sock = socket(AF_INET, SOCK_STREAM, 0)) == -1)perror("socket()");
+    int tr = 1;
+    if(setsockopt(n->sock, SOL_SOCKET, SO_REUSEADDR, &tr, sizeof(int)) == -1)perror("setsockopt()");
     if(bind(n->sock, (struct sockaddr*)&local_addr, sizeof(struct sockaddr_in)) == -1)perror("bind()");
 
     if(listen(n->sock, 5) == -1)perror("listen()");
@@ -257,6 +581,14 @@ struct peer init_peer(int sock, struct sockaddr_in addr){
     return ret;
 }
 
+_Bool is_leaf(struct node* n){
+    return n->n_children == 0;
+}
+
+_Bool is_root(struct node* n){
+    return n->parent.sock == -1;
+}
+
 /*_Bool spread_msg(struct node* n, int msglen, char* msg, int from_sock){*/
 _Bool spread_msg(struct node* n, struct msg_header header, char* msg, int from_sock){
     _Bool ret = 1;
@@ -266,7 +598,9 @@ _Bool spread_msg(struct node* n, struct msg_header header, char* msg, int from_s
      *header.bufsz = msglen;
      */
     /*if(n->parent.sock != from_sock)send(n->parent.sock, msg, );*/
-    if(n->parent.sock != from_sock){
+    puts("spread msg called");
+    if(n->parent.sock != from_sock && n->parent.sock != -1){
+        puts("sending to parent");
         ret &= (send(n->parent.sock, &header, sizeof(struct msg_header), 0)
                 == sizeof(struct msg_header));
         /*ret &= (send(n->parent.sock, msg, msglen, 0) == msglen);*/
@@ -274,13 +608,37 @@ _Bool spread_msg(struct node* n, struct msg_header header, char* msg, int from_s
     }
     pthread_mutex_lock(&n->children_lock);
     for(int i = 0; i < n->n_children; ++i){
-        if(n->children[i].sock == from_sock)continue;
+        printf("sending to child? %i %i\n", n->children[i].sock, from_sock);
+        if(n->children[i].sock == from_sock ||
+           n->children[i].sock == -1)continue;
+       puts("YES");
         ret &= (send(n->children[i].sock, &header, sizeof(struct msg_header), 0)
                 == sizeof(struct msg_header));
         ret &= (send(n->children[i].sock, msg, header.bufsz, 0) == header.bufsz);
     }
     pthread_mutex_unlock(&n->children_lock);
     return ret;
+}
+
+_Bool pass_msg_up(struct node* n, struct msg_header header, char* msg, int from_sock){
+    _Bool ret = 1;
+    /* likely don't need this check */
+    if(n->parent.sock != from_sock){
+        ret &= (send(n->parent.sock, &header, sizeof(struct msg_header), 0)
+                == sizeof(struct msg_header));
+        ret &= (send(n->parent.sock, msg, header.bufsz, 0) == header.bufsz);
+    }
+    return ret;
+}
+
+void init_diagram_request(struct node* n){
+    struct msg_header header;
+    header.type = HIER_REQ;
+    /* at least 1 byte must be sent */
+    header.bufsz = 1;
+    char spoof = (is_leaf(n)) ? 'z' : 'a';
+    /*spread_msg(n, header, &spoof, n->sock);*/
+    spread_msg(n, header, &spoof, n->sock);
 }
 
 _Bool peer_eq(struct peer x, struct peer y){
@@ -294,7 +652,7 @@ void* read_peer_msg_thread(void* node_peer_v){
     struct node_peer* np = node_peer_v;
 
     struct msg_header header;
-    int b_read;
+    int b_read, expected_paths;
     
     char buf[MSGLEN];
     while(1){
@@ -330,13 +688,78 @@ void* read_peer_msg_thread(void* node_peer_v){
 
         /* TODO: handle b_read != sizeof(struct msg_header) */
         /* TODO: handle b_read != header.bufsz */
-        #ifdef COLOR_SUPPORT
-        printf("%s%s%s: \"%s\"\n", ANSI_BLUE, header.nick, ANSI_RESET, buf);
-        #else
-        printf("%s: \"%s\"\n", header.nick, buf);
-        #endif
-        /*spread_msg(np->n, b_read, buf, np->p.sock);*/
-        spread_msg(np->n, header, buf, np->p.sock);
+        switch(header.type){
+            case TEXT:
+                #ifdef COLOR_SUPPORT
+                printf("%s%s%s: \"%s\"\n", ANSI_BLUE, header.nick, ANSI_RESET, buf);
+                #else
+                printf("%s: \"%s\"\n", header.nick, buf);
+                #endif
+                spread_msg(np->n, header, buf, np->p.sock);
+                break;
+            case HIER_REQ:
+                puts("got HIER_REQ, testing leafiness...");
+                if(is_leaf(np->n)){
+                    puts("we've been reached :)  a leaf");
+                    struct msg_header pu_h;
+                    pu_h.type = N_PASS_UP_ALERT;
+                    pu_h.bufsz = 1;
+                    char spoof;
+                    /* else? */pass_msg_up(np->n, pu_h, &spoof, np->n->sock);
+
+                    /* give a little time */
+                    usleep(100);
+                    pu_h.type = NICK_ALERT;
+                    /* we're not using NICKLEN because we need
+                     * to fit many nicks
+                     */
+                    pu_h.bufsz = strlen(np->n->nick)+1;
+                    char tmp_buf[MSGLEN] = {0};
+                    sprintf(tmp_buf, "%s,", np->n->nick);
+                    pass_msg_up(np->n, pu_h, tmp_buf, np->n->sock);
+                    break;
+                }
+                expected_paths = 0;
+                /*
+                 * else if(is_root(np->n)){
+                 *     expected_paths = 0;
+                 * }
+                */
+                /* *buf == 'z' when sender is
+                 * a leaf
+                 * and we must ensure that they
+                 * end up with a HIER_REQ
+                 */
+                if(*buf == 'z'){
+                    *buf = 'a';
+                    spread_msg(np->n, header, buf, -1);
+                }
+                else spread_msg(np->n, header, buf, np->p.sock);
+                break;
+            case N_PASS_UP_ALERT:
+                if(is_root(np->n)){
+                    ++expected_paths;
+                }
+                pass_msg_up(np->n, header, buf, np->p.sock);
+                break;
+            case NICK_ALERT:
+                /* TODO: is_root() return should be stored up top */
+                if(is_root(np->n)){
+                    /*gotta combine it all until expected_paths is reached*/
+                    printf("got our string: %s\n", buf);
+                }
+                else{
+                    struct msg_header pu_h;
+                    pu_h.type = NICK_ALERT;
+                    /* lol */
+                    char tmp_buf[MSGLEN*100] = {0};
+                    sprintf(tmp_buf, "%s,%s", np->n->nick, buf);
+                    pass_msg_up(np->n, pu_h, tmp_buf, np->p.sock);
+                }
+            default:{;}
+        }
+
+        /*spread_msg(np->n, header, buf, np->p.sock);*/
         /* TODO: pop it in mq */
     }
 }
@@ -467,9 +890,9 @@ int main(int a, char** b){
         any.sin_family = AF_INET;
         any.sin_port = htons(PORT);
         any.sin_addr.s_addr = htonl(INADDR_ANY);
-        init_node(&n, any);
+        init_node(&n, b[1], any);
     }
-    else init_node(&n, strtoip(b[2]));
+    else init_node(&n, b[1], strtoip(b[2]));
     /*init_node(&n);*/
     pthread_t accept_th = spawn_accept_connections_thread(&n);
     if(a > 3){
@@ -479,7 +902,11 @@ int main(int a, char** b){
 
     char buf[MSGLEN];
 
+    /* TODO: header.nick should be inserted in helper functions
+     * now that it's included in struct node
+     */
     struct msg_header header;
+    header.type = TEXT;
     memcpy(header.nick, b[1], NICKLEN-1);
     header.nick[NICKLEN-1] = 0;
 
@@ -492,7 +919,8 @@ int main(int a, char** b){
     while(1){
         header.bufsz = read_stdin(buf);
         if(!header.bufsz)continue;
-        spread_msg(&n, header, buf, n.sock);
+        if(*buf == '/')init_diagram_request(&n);
+        else spread_msg(&n, header, buf, n.sock);
     }
 
     pthread_join(accept_th, NULL);
