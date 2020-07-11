@@ -739,6 +739,15 @@ void handle_msg(struct node_peer* np, struct msg_header header, char* buf){
     }
 }
 
+/* NOTE: THIS FUNCTION MAY ONLY BE CALLED WHEN `children_lock` IS ACQUIRED */
+void remove_node(struct node* n, int ind){
+    memset(&n->children[ind].addr, 0, sizeof(struct sockaddr_in));
+    n->children[ind].sock = -1;
+    memmove(n->children+ind, n->children+ind+1, 
+            (n->n_children-ind-1)*sizeof(struct peer));
+    --n->n_children;
+}
+
 /* a thread is spawned for each new accepted peer */
 /*data needs to be added to some kind of buffer*/
 /*data will be limited to MSGLEN bytes*/
@@ -760,11 +769,7 @@ void* read_peer_msg_thread(void* node_peer_v){
             pthread_mutex_lock(&np->n->children_lock);
             for(int i = 0; i < np->n->n_children; ++i){
                 if(peer_eq(np->p, np->n->children[i])){
-                    memset(&np->n->children[i].addr, 0, sizeof(struct sockaddr_in));
-                    np->n->children[i].sock = -1;
-                    memmove(np->n->children+i, np->n->children+i+1, 
-                            (np->n->n_children-i-1)*sizeof(struct peer));
-                    --np->n->n_children;
+                    remove_node(np->n, i);
                     pthread_mutex_unlock(&np->n->children_lock);
                     return NULL;
                 }
@@ -892,9 +897,18 @@ void p_welcome(char* nick){
     #endif
 }
 
-_Bool remove_child(struct node* n, char* child_nick){
-    (void)n;
-    (void)child_nick;
+/* we don't store nicks so child must be specified by ip */
+/*we now need a print_children() function to print our childrens' ip addresses*/
+_Bool remove_child(struct node* n, char* child_ip){
+    pthread_mutex_lock(&n->children_lock);
+    struct sockaddr_in addr = strtoip(child_ip);
+    for(int i = 0; i < n->n_children; ++i){
+        if(n->children[i].addr.sin_addr.s_addr == addr.sin_addr.s_addr){
+            remove_node(n, i);
+            break;
+        }
+    }
+    pthread_mutex_unlock(&n->children_lock);
     return 0;
 }
 
