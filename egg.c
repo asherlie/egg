@@ -669,6 +669,7 @@ void* read_peer_msg_thread(void* node_peer_v){
                 if(peer_eq(np->p, np->n->children[i])){
                     memset(&np->n->children[i].addr, 0, sizeof(struct sockaddr_in));
                     np->n->children[i].sock = -1;
+                    /* TODO: this is misaligning the buffer */
                     memmove(np->n->children+i, np->n->children+i+1, 
                             (np->n->n_children-i-1)*sizeof(struct peer));
                     pthread_mutex_unlock(&np->n->children_lock);
