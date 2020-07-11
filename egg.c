@@ -761,7 +761,9 @@ void* read_peer_msg_thread(void* node_peer_v){
         if((b_read = read(np->p.sock, &header, sizeof(struct msg_header))) <= 0 ||
            (b_read = read(np->p.sock, buf, header.bufsz)) <= 0){
             /*puts("peer removed");*/
+            puts("we've lost a connection");
             if(peer_eq(np->p, np->n->parent)){
+                puts("found peer equality with parent");
                 memset(&np->n->parent.addr, 0, sizeof(struct sockaddr_in));
                 np->n->parent.sock = -1;
                 return NULL;
