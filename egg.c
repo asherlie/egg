@@ -178,6 +178,8 @@ each client will probably need
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
+#define VER_STR "1.0.0"
+
 #define PORT 8080
 
 #define MSGLEN 500
@@ -969,8 +971,8 @@ int main(int a, char** b){
      * ./egg <nick> <local ip> <remote ip>
      */
     if(a < 3){
-        printf("usage:\n  %s <nick> <local ip>\n  %s <nick> <local ip> <remote ip>\n",
-               *b, *b);
+        printf("egg v%s\nusage:\n  %s <nick> <local ip>\n  %s <nick> <local ip> <remote ip>\n",
+               VER_STR, *b, *b);
         return EXIT_FAILURE;
     }
 
@@ -995,7 +997,7 @@ int main(int a, char** b){
         if(!join_tree(&n, addr))puts("failed to connect");
     }
 
-    char buf[MSGLEN];
+    char buf[MSGLEN+1];
 
     /* TODO: header.nick should be inserted in helper functions
      * now that it's included in struct node
@@ -1010,7 +1012,16 @@ int main(int a, char** b){
      * pthread_t iff;
      * pthread_create(&iff, NULL, pop_mq_thread, n.mq);
     */
-
+void p_help(){
+    puts("<text>        : send message\n"
+         "/[k]ick <IP>  : kick direct child at <IP>\n"
+         "/[p]rint      : print tree structure of entire network\n"
+         "/[c]children  : print children\n"
+         "/[h]elp       : print this menu");
+         #if 0
+         "/[b]lock <IP> : block <IP> from directly connecting");
+         #endif
+}
     while(1){
         header.bufsz = read_stdin(buf);
         if(!header.bufsz)continue;
@@ -1040,6 +1051,10 @@ int main(int a, char** b){
                     n.paths_recvd = 0;
                     pthread_mutex_unlock(&n.expected_paths_lock);
                     init_diagram_request(&n);
+                    break;
+                /* TODO: add a /block command */
+                case 'B':
+                case 'b':
                     break;
                 case 'C':
                 case 'c':
