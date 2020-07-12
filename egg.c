@@ -604,9 +604,14 @@ _Bool spread_msg(struct node* n, struct msg_header header, char* msg, int from_s
      *header.bufsz = msglen;
      */
     /*if(n->parent.sock != from_sock)send(n->parent.sock, msg, );*/
+
+    #ifdef DEBUG
     puts("spread msg called");
+    #endif
     if(n->parent.sock != from_sock && n->parent.sock != -1){
+        #ifdef DEBUG
         puts("sending to parent");
+        #endif
         ret &= (send(n->parent.sock, &header, sizeof(struct msg_header), 0)
                 == sizeof(struct msg_header));
         /*ret &= (send(n->parent.sock, msg, msglen, 0) == msglen);*/
@@ -614,10 +619,14 @@ _Bool spread_msg(struct node* n, struct msg_header header, char* msg, int from_s
     }
     pthread_mutex_lock(&n->children_lock);
     for(int i = 0; i < n->n_children; ++i){
+        #ifdef DEBUG
         printf("sending to child? %i %i\n", n->children[i].sock, from_sock);
+        #endif
         if(n->children[i].sock == from_sock ||
            n->children[i].sock == -1)continue;
+       #ifdef DEBUG
        puts("YES");
+       #endif
         ret &= (send(n->children[i].sock, &header, sizeof(struct msg_header), 0)
                 == sizeof(struct msg_header));
         ret &= (send(n->children[i].sock, msg, header.bufsz, 0) == header.bufsz);
@@ -662,15 +671,21 @@ void handle_msg(struct node_peer* np, struct msg_header header, char* buf){
             spread_msg(np->n, header, buf, np->p.sock);
             break;
         case HIER_REQ:
+            #ifdef DEBUG
             puts("got HIER_REQ, testing leafiness...");
+            #endif
             if(is_leaf(np->n)){
+                #ifdef DEBUG
                 puts("we've been reached :)  a leaf");
+                #endif
                 struct msg_header pu_h;
                 pu_h.type = N_PASS_UP_ALERT;
                 pu_h.bufsz = 1;
                 char spoof;
                 /* else? */pass_msg_up(np->n, pu_h, &spoof, np->n->sock);
+                #ifdef DEBUG
                 puts("passed up N_PASS_UP_ALERT");
+                #endif
 
                 /* give a little time */
                 usleep(100);
@@ -684,7 +699,9 @@ void handle_msg(struct node_peer* np, struct msg_header header, char* buf){
                 pass_msg_up(np->n, pu_h, tmp_buf, np->n->sock);
                 break;
             }
+            #ifdef DEBUG
             puts("expected_paths, paths_recvd set to 0");
+            #endif
             pthread_mutex_lock(&np->n->expected_paths_lock);
             np->n->expected_paths = 0;
             np->n->paths_recvd = 0;
@@ -708,8 +725,10 @@ void handle_msg(struct node_peer* np, struct msg_header header, char* buf){
         case N_PASS_UP_ALERT:
             if(is_root(np->n)){
                 pthread_mutex_lock(&np->n->expected_paths_lock);
+                #ifdef DEBUG
                 printf("incrementing expected paths from %i to %i\n",
                        np->n->expected_paths, np->n->expected_paths+1);
+                #endif
                 ++np->n->expected_paths;
                 pthread_mutex_unlock(&np->n->expected_paths_lock);
                 break;
@@ -722,7 +741,9 @@ void handle_msg(struct node_peer* np, struct msg_header header, char* buf){
                 /*gotta combine it all until expected_paths is reached*/
                 pthread_mutex_lock(&np->n->expected_paths_lock);
                 ++np->n->paths_recvd;
+                /*#ifdef DEBUG*/
                 printf("%i/%i strings recvd, got our string: %s\n", np->n->paths_recvd, np->n->expected_paths, buf);
+                /*#endif*/
                 pthread_mutex_unlock(&np->n->expected_paths_lock);
             }
             else{
@@ -733,7 +754,9 @@ void handle_msg(struct node_peer* np, struct msg_header header, char* buf){
                 sprintf(tmp_buf, "%s,%s", np->n->nick, buf);
                 pu_h.bufsz = strlen(tmp_buf);
                 pass_msg_up(np->n, pu_h, tmp_buf, np->p.sock);
+                #ifdef DEBUG
                 printf("doing my duty, passing up childrens' nick along with mine: %s\n", tmp_buf);
+                #endif
             }
         default:{;}
     }
@@ -1009,6 +1032,13 @@ int main(int a, char** b){
                 /* print */
                 case 'P':
                 case 'p':
+                    /* when root of two node network initiats request, expected paths isn't set to 0
+                     * TODO: investigate
+                     */
+                    pthread_mutex_lock(&n.expected_paths_lock);
+                    n.expected_paths = 0;
+                    n.paths_recvd = 0;
+                    pthread_mutex_unlock(&n.expected_paths_lock);
                     init_diagram_request(&n);
                     break;
                 case 'C':
