@@ -1012,15 +1012,31 @@ int main(int a, char** b){
      * pthread_t iff;
      * pthread_create(&iff, NULL, pop_mq_thread, n.mq);
     */
+
 void p_help(){
-    puts("<text>        : send message\n"
-         "/[k]ick <IP>  : kick direct child at <IP>\n"
-         "/[p]rint      : print tree structure of entire network\n"
-         "/[c]children  : print children\n"
-         "/[h]elp       : print this menu");
-         #if 0
-         "/[b]lock <IP> : block <IP> from directly connecting");
+    printf(
+         "%s|*******************************************************|%s\n"
+         "%s|%s<text>        : send message                           %s|%s\n"
+         "%s|%s/[k]ick <IP>  : kick direct child at <IP>              %s|%s\n"
+         "%s|%s/[p]rint      : print tree structure of entire network %s|%s\n"
+         "%s|%s/[c]children  : print children                         %s|%s\n"
+         "%s|%s/[h]elp       : print this menu                        %s|%s\n"
+         "%s\\*******************************************************/%s\n",
+
+         #ifdef COLOR_SUPPORT
+         ANSI_RED, ANSI_RESET, ANSI_RED, ANSI_RESET,
+         ANSI_RED, ANSI_RESET, ANSI_RED, ANSI_RESET,
+         ANSI_RED, ANSI_RESET, ANSI_RED, ANSI_RESET,
+         ANSI_RED, ANSI_RESET, ANSI_RED, ANSI_RESET,
+         ANSI_RED, ANSI_RESET, ANSI_RED, ANSI_RESET,
+         ANSI_RED, ANSI_RESET, ANSI_RED, ANSI_RESET
+         #else
+         "", "", "", "", "", "",
+         "", "", "", "", "", "",
+         "", "", "", "", "", "",
+         "", "", "", "", "","" 
          #endif
+         );
 }
     while(1){
         header.bufsz = read_stdin(buf);
