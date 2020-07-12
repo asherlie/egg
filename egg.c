@@ -777,6 +777,12 @@ void* read_peer_msg_thread(void* node_peer_v){
                 }
             }
             pthread_mutex_unlock(&np->n->children_lock);
+            /* TODO: when would this happen?
+             * it seems like this occurs when we've /[k]icked
+             * somebody
+             * why?
+             */
+            return NULL;
         }
 
         buf[b_read] = 0;
@@ -900,14 +906,14 @@ void p_welcome(char* nick){
 }
 
 /* we don't store nicks so child must be specified by ip */
-/*we now need a print_children() function to print our childrens' ip addresses*/
 _Bool remove_child(struct node* n, char* child_ip){
     _Bool ret = 0;
     pthread_mutex_lock(&n->children_lock);
     struct sockaddr_in addr = strtoip(child_ip);
     for(int i = 0; i < n->n_children; ++i){
         if(n->children[i].addr.sin_addr.s_addr == addr.sin_addr.s_addr){
-            shutdown(n->children[i].sock, SHUT_RDWR);
+            if(shutdown(n->children[i].sock, SHUT_RDWR) == -1)
+                perror("shutdown()");
             close(n->children[i].sock);
             remove_node(n, i);
             ret = 1;
