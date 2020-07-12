@@ -920,7 +920,7 @@ int read_stdin(char* buf){
         if((c = getc(stdin)) == EOF || c == '\n')break;
         buf[i] = c;
     }
-    buf[i+1] = 0;
+    buf[i] = 0;
     return i;
 }
 
