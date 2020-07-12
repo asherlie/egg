@@ -1052,6 +1052,10 @@ void p_help(){
                     pthread_mutex_unlock(&n.expected_paths_lock);
                     init_diagram_request(&n);
                     break;
+                case 'H':
+                case 'h':
+                    p_help();
+                    break;
                 /* TODO: add a /block command */
                 case 'B':
                 case 'b':
