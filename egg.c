@@ -907,6 +907,7 @@ _Bool remove_child(struct node* n, char* child_ip){
     struct sockaddr_in addr = strtoip(child_ip);
     for(int i = 0; i < n->n_children; ++i){
         if(n->children[i].addr.sin_addr.s_addr == addr.sin_addr.s_addr){
+            shutdown(n->children[i].sock, SHUT_RDWR);
             close(n->children[i].sock);
             remove_node(n, i);
             ret = 1;
