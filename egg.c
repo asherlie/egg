@@ -178,7 +178,7 @@ each client will probably need
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
-#define VER_STR "1.0.0"
+#define VER_STR "1.0.1"
 
 #define PORT 8080
 
@@ -966,6 +966,32 @@ void print_children(struct node* n, FILE* fp){
     pthread_mutex_unlock(&n->children_lock);
 }
 
+void p_help(){
+    printf(
+         "%s|*******************************************************|%s\n"
+         "%s|%s<text>        : send message                           %s|%s\n"
+         "%s|%s/[k]ick <IP>  : kick direct child at <IP>              %s|%s\n"
+         "%s|%s/[p]rint      : print tree structure of entire network %s|%s\n"
+         "%s|%s/[c]children  : print children                         %s|%s\n"
+         "%s|%s/[h]elp       : print this menu                        %s|%s\n"
+         "%s\\*******************************************************/%s\n",
+
+         #ifdef COLOR_SUPPORT
+         ANSI_RED, ANSI_RESET, ANSI_RED, ANSI_RESET,
+         ANSI_RED, ANSI_RESET, ANSI_RED, ANSI_RESET,
+         ANSI_RED, ANSI_RESET, ANSI_RED, ANSI_RESET,
+         ANSI_RED, ANSI_RESET, ANSI_RED, ANSI_RESET,
+         ANSI_RED, ANSI_RESET, ANSI_RED, ANSI_RESET,
+         ANSI_RED, ANSI_RESET, ANSI_RED, ANSI_RESET
+         #else
+         "", "", "", "", "", "",
+         "", "", "", "", "", "",
+         "", "", "", "", "", "",
+         "", "", "", "", "","" 
+         #endif
+         );
+}
+
 int main(int a, char** b){
     /* ./egg <nick> <local ip>
      * ./egg <nick> <local ip> <remote ip>
@@ -1013,31 +1039,6 @@ int main(int a, char** b){
      * pthread_create(&iff, NULL, pop_mq_thread, n.mq);
     */
 
-void p_help(){
-    printf(
-         "%s|*******************************************************|%s\n"
-         "%s|%s<text>        : send message                           %s|%s\n"
-         "%s|%s/[k]ick <IP>  : kick direct child at <IP>              %s|%s\n"
-         "%s|%s/[p]rint      : print tree structure of entire network %s|%s\n"
-         "%s|%s/[c]children  : print children                         %s|%s\n"
-         "%s|%s/[h]elp       : print this menu                        %s|%s\n"
-         "%s\\*******************************************************/%s\n",
-
-         #ifdef COLOR_SUPPORT
-         ANSI_RED, ANSI_RESET, ANSI_RED, ANSI_RESET,
-         ANSI_RED, ANSI_RESET, ANSI_RED, ANSI_RESET,
-         ANSI_RED, ANSI_RESET, ANSI_RED, ANSI_RESET,
-         ANSI_RED, ANSI_RESET, ANSI_RED, ANSI_RESET,
-         ANSI_RED, ANSI_RESET, ANSI_RED, ANSI_RESET,
-         ANSI_RED, ANSI_RESET, ANSI_RED, ANSI_RESET
-         #else
-         "", "", "", "", "", "",
-         "", "", "", "", "", "",
-         "", "", "", "", "", "",
-         "", "", "", "", "","" 
-         #endif
-         );
-}
     while(1){
         header.bufsz = read_stdin(buf);
         if(!header.bufsz)continue;
@@ -1089,3 +1090,8 @@ void p_help(){
     pthread_join(accept_th, NULL);
     return 0;
 }
+/*
+ * should we be able to join a tree from within the program?
+ * this would allow us to mend
+ * i say only allow this is /[b]lock is implemented
+*/
