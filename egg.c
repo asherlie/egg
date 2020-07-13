@@ -178,6 +178,8 @@ each client will probably need
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
+#include "pp.h"
+
 #define VER_STR "1.0.2"
 
 #define PORT 8080
@@ -541,7 +543,9 @@ struct node{
     int sock, n_children, children_cap,
         expected_paths, paths_recvd;
 
-    char nick[NICKLEN];
+    char nick[NICKLEN],
+         /* lol */
+         path_str[MSGLEN*100];
     /* parent is the peer we've connected to directly to join the network */
 
     /* TODO: should likely be
@@ -705,6 +709,7 @@ void handle_msg(struct node_peer* np, struct msg_header header, char* buf){
             puts("expected_paths, paths_recvd set to 0");
             #endif
             pthread_mutex_lock(&np->n->expected_paths_lock);
+            *np->n->path_str = 0;
             np->n->expected_paths = 0;
             np->n->paths_recvd = 0;
             pthread_mutex_unlock(&np->n->expected_paths_lock);
@@ -744,8 +749,20 @@ void handle_msg(struct node_peer* np, struct msg_header header, char* buf){
                 pthread_mutex_lock(&np->n->expected_paths_lock);
                 ++np->n->paths_recvd;
                 /*#ifdef DEBUG*/
-                printf("%i/%i strings recvd, got our string: %s\n", np->n->paths_recvd, np->n->expected_paths, buf);
+                /*printf("%i/%i strings recvd, got our string: %s\n", np->n->paths_recvd, np->n->expected_paths, buf);*/
                 /*#endif*/
+                char tmp_buf[MSGLEN*1000];
+
+                /*sprintf(tmp_buf, "%s,%s|", np->n->nick, np->n->path_str);*/
+                sprintf(tmp_buf, "%s,%s|%s", np->n->nick, buf, np->n->path_str);
+
+                /*memcpy(tmp_buf, np->n->path_str, MSGLEN*100);*/
+                memcpy(np->n->path_str, tmp_buf, MSGLEN*100);
+                /*sprintf(np->n->path_str, "%s,%s|", np->n->nick, np->n->path_str);*/
+                /*printf("str is nw: %s\n", np->n->path_str);*/
+                if(np->n->paths_recvd == np->n->expected_paths){
+                    print_tree(np->n->path_str);
+                }
                 pthread_mutex_unlock(&np->n->expected_paths_lock);
             }
             else{
@@ -1064,6 +1081,7 @@ int main(int a, char** b){
                      * TODO: investigate
                      */
                     pthread_mutex_lock(&n.expected_paths_lock);
+                    *n.path_str = 0;
                     n.expected_paths = 0;
                     n.paths_recvd = 0;
                     pthread_mutex_unlock(&n.expected_paths_lock);
