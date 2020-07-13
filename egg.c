@@ -178,7 +178,7 @@ each client will probably need
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
-#define VER_STR "1.0.1"
+#define VER_STR "1.0.2"
 
 #define PORT 8080
 
@@ -1090,7 +1090,7 @@ int main(int a, char** b){
     pthread_join(accept_th, NULL);
     return 0;
 }
-/*
+/* TODO:
  * should we be able to join a tree from within the program?
  * this would allow us to mend
  * i say only allow this is /[b]lock is implemented
