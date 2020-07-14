@@ -537,6 +537,9 @@ struct peer{
 };
 
 struct node{
+    _Bool awaiting_alert;
+    pthread_mutex_t await_lock;
+
     volatile _Bool active;
     pthread_mutex_t children_lock,
                     expected_paths_lock;
@@ -568,6 +571,9 @@ void init_node(struct node* n, char* nick, struct sockaddr_in local_addr){
     n->nick[NICKLEN-1] = 0;
 
     mq_init(n->mq);
+
+    n->awaiting_alert = 0;
+    pthread_mutex_init(&n->await_lock, NULL);
 
     pthread_mutex_init(&n->children_lock, NULL);
     pthread_mutex_init(&n->expected_paths_lock, NULL);
@@ -659,6 +665,9 @@ void init_diagram_request(struct node* n){
     header.bufsz = 1;
     char spoof = (is_leaf(n)) ? 'z' : 'a';
     /*spread_msg(n, header, &spoof, n->sock);*/
+    pthread_mutex_lock(&n->await_lock);
+    n->awaiting_alert = 1;
+    pthread_mutex_unlock(&n->await_lock);
     spread_msg(n, header, &spoof, n->sock);
 }
 
@@ -761,7 +770,12 @@ void handle_msg(struct node_peer* np, struct msg_header header, char* buf){
                 /*sprintf(np->n->path_str, "%s,%s|", np->n->nick, np->n->path_str);*/
                 /*printf("str is nw: %s\n", np->n->path_str);*/
                 if(np->n->paths_recvd == np->n->expected_paths){
-                    print_tree(np->n->path_str);
+                    struct msg_header pu_h;
+                    pu_h.type = HIER_ALERT;
+                    pu_h.bufsz = strlen(np->n->path_str);
+                    *pu_h.nick = 0;
+                    spread_msg(np->n, pu_h, np->n->path_str, np->n->sock);
+                    /*print_tree(np->n->path_str);*/
                 }
                 pthread_mutex_unlock(&np->n->expected_paths_lock);
             }
@@ -777,6 +791,18 @@ void handle_msg(struct node_peer* np, struct msg_header header, char* buf){
                 printf("doing my duty, passing up childrens' nick along with mine: %s\n", tmp_buf);
                 #endif
             }
+            break;
+        case HIER_ALERT:
+            pthread_mutex_lock(&np->n->await_lock);
+            if(np->n->awaiting_alert){
+                /* TODO: take the expensive call to print_tree()
+                 * out of the threadsafe section */
+                print_tree(buf);
+                np->n->awaiting_alert = 0;
+            }
+            pthread_mutex_unlock(&np->n->await_lock);
+            spread_msg(np->n, header, buf, np->p.sock);
+            break;
         default:{;}
     }
 }
