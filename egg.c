@@ -770,11 +770,11 @@ void handle_msg(struct node_peer* np, struct msg_header header, char* buf){
                 /*sprintf(np->n->path_str, "%s,%s|", np->n->nick, np->n->path_str);*/
                 /*printf("str is nw: %s\n", np->n->path_str);*/
                 if(np->n->paths_recvd == np->n->expected_paths){
-                    struct msg_header pu_h;
-                    pu_h.type = HIER_ALERT;
-                    pu_h.bufsz = strlen(np->n->path_str);
-                    *pu_h.nick = 0;
-                    spread_msg(np->n, pu_h, np->n->path_str, np->n->sock);
+                    struct msg_header sp_h;
+                    sp_h.type = HIER_ALERT;
+                    sp_h.bufsz = strlen(np->n->path_str);
+                    *sp_h.nick = 0;
+                    spread_msg(np->n, sp_h, np->n->path_str, np->n->sock);
                     /*print_tree(np->n->path_str);*/
                 }
                 pthread_mutex_unlock(&np->n->expected_paths_lock);
