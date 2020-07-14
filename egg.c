@@ -476,7 +476,7 @@ this does not work - g|f
 
 #endif
 
-typedef enum {TEXT=0, HIER_REQ, N_PASS_UP_ALERT, NICK_ALERT}mtype;
+typedef enum {TEXT=0, HIER_REQ, N_PASS_UP_ALERT, NICK_ALERT, HIER_ALERT}mtype;
 
 struct msg_header{
     mtype type;
