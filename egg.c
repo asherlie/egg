@@ -703,7 +703,7 @@ void handle_msg(struct node_peer* np, struct msg_header header, char* buf){
                 #endif
 
                 /* give a little time */
-                usleep(100);
+                usleep(100000);
                 pu_h.type = NICK_ALERT;
                 /* we're not using NICKLEN because we need
                  * to fit many nicks
@@ -754,6 +754,7 @@ void handle_msg(struct node_peer* np, struct msg_header header, char* buf){
         case NICK_ALERT:
             /* TODO: is_root() return should be stored up top */
             if(is_root(np->n)){
+                printf("we're the root and we've been sent: \"%s\"\n", buf);
                 /*gotta combine it all until expected_paths is reached*/
                 pthread_mutex_lock(&np->n->expected_paths_lock);
                 ++np->n->paths_recvd;
@@ -764,16 +765,41 @@ void handle_msg(struct node_peer* np, struct msg_header header, char* buf){
 
                 /*sprintf(tmp_buf, "%s,%s|", np->n->nick, np->n->path_str);*/
                 sprintf(tmp_buf, "%s,%s|%s", np->n->nick, buf, np->n->path_str);
+                printf("constructed str: %s\n", tmp_buf);
 
                 /*memcpy(tmp_buf, np->n->path_str, MSGLEN*100);*/
                 memcpy(np->n->path_str, tmp_buf, MSGLEN*100);
                 /*sprintf(np->n->path_str, "%s,%s|", np->n->nick, np->n->path_str);*/
                 /*printf("str is nw: %s\n", np->n->path_str);*/
+                #if 0
+                this is what is up:
+                    2 HIER_ALERTs are being sent
+                    when the first is recieved, it thikns that is it
+
+                    2 might be being sent because expected paths is incremented
+                    to 1 and then our first alert is recieved
+
+                    they are equal in this moment
+
+                    confirm this by printing %i == %i
+
+                    if they are 1 == 1
+                    ::))
+
+                    this is a hard problem to fix
+                    could just wait longer before sending nick alert from leaves
+                    
+                    or could make it so that each node sends up a formatted str
+                    then each parent knows to expect node->n_children responses
+
+                    #endif
+
                 if(np->n->paths_recvd == np->n->expected_paths){
                     struct msg_header sp_h;
                     sp_h.type = HIER_ALERT;
                     sp_h.bufsz = strlen(np->n->path_str);
                     *sp_h.nick = 0;
+                    printf("spreading message: %s\n", np->n->path_str);
                     spread_msg(np->n, sp_h, np->n->path_str, np->n->sock);
                     pthread_mutex_lock(&np->n->await_lock);
                     if(np->n->awaiting_alert){
@@ -798,10 +824,41 @@ void handle_msg(struct node_peer* np, struct msg_header header, char* buf){
             }
             break;
         case HIER_ALERT:
+            printf("got hier alert: %s\n", buf);
             pthread_mutex_lock(&np->n->await_lock);
             if(np->n->awaiting_alert){
                 /* TODO: take the expensive call to print_tree()
                  * out of the threadsafe section */
+                #if 0
+                oops. the root of the tree might mistakenly send multiple strings
+                all but the last will be inaccurate. this is because
+                leaves send their N_PASS_UP_ALERT and immediately after send their
+                NICK_ALERT
+                if one path is quicker than others, n_expected will be 1 
+                and when that one is recieved, it will be spread.
+                
+                not a huge issue because expected is only set to 0 when a new
+                HIER_REQ comes through
+
+                we could solve this by keeping track of an dchecking when a paths_recvd == expected
+                if we have spread the str already
+
+                this system is so ridiculous... why send a N_PASS_UP_ALERT when it is essentially the same
+                as a NICK_ALERT
+
+                one parent at a time can confirm that all of their children have passed up their nicks
+
+                ... what happens when > 1 users initialize a HIER_REQ simultaneously
+                or before the root has done its job
+
+                ok legit this will work:
+                    leaves get request alert
+                        they send N_PASS_UP_ALERT
+                    
+                    every non-leaf waits for n->n_children responses
+                    then passes up the sum of all nums
+                #endif
+
                 print_tree(buf);
                 np->n->awaiting_alert = 0;
             }
