@@ -775,6 +775,7 @@ void handle_msg(struct node_peer* np, struct msg_header header, char* buf){
              * and we must ensure that they
              * end up with a HIER_REQ
              */
+            /* not the most elegant solution */
             if(*buf == 'z'){
                 *buf = 'a';
                 spread_msg(np->n, header, buf, -1);
@@ -827,21 +828,7 @@ void handle_msg(struct node_peer* np, struct msg_header header, char* buf){
                 }
             }
 
-            /* below here is the old implementation */
             pthread_mutex_unlock(&np->n->expected_paths_lock);
-            break;
-            /*pthread_mutex_unlock(&np->n->expected_paths_lock);*/
-            if(is_root(np->n)){
-                pthread_mutex_lock(&np->n->expected_paths_lock);
-                #ifdef DEBUG
-                printf("incrementing expected paths from %i to %i\n",
-                       np->n->expected_paths, np->n->expected_paths+1);
-                #endif
-                ++np->n->expected_paths;
-                pthread_mutex_unlock(&np->n->expected_paths_lock);
-                break;
-            }
-            pass_msg_up(np->n, header, buf, np->p.sock);
             break;
         case NICK_ALERT:
             /* TODO: is_root() return should be stored up top */
