@@ -544,7 +544,10 @@ struct node{
     pthread_mutex_t children_lock,
                     expected_paths_lock;
     int sock, n_children, children_cap,
-        expected_paths, paths_recvd;
+        expected_paths, paths_recvd,
+
+        /* children_notified is used only for intermediate N_PASS_UP_ALERTs */
+        children_notified;
 
     char nick[NICKLEN],
          /* lol */
@@ -663,7 +666,7 @@ void init_diagram_request(struct node* n){
     header.type = HIER_REQ;
     /* at least 1 byte must be sent */
     header.bufsz = 1;
-    char spoof = (is_leaf(n)) ? 'z' : 'a';
+    char spoof = (is_leaf(n) || is_root(n)) ? 'z' : 'a';
     /*spread_msg(n, header, &spoof, n->sock);*/
     pthread_mutex_lock(&n->await_lock);
     n->awaiting_alert = 1;
@@ -686,6 +689,37 @@ void handle_msg(struct node_peer* np, struct msg_header header, char* buf){
             spread_msg(np->n, header, buf, np->p.sock);
             break;
         case HIER_REQ:
+        #if !1
+        in the new system when a HIER_REQ is recvd,
+        each user sets a flag indicating the amount
+        of NICK_ALERTs it is expecting
+
+        each node can still use the ridiculously sized path_str
+        to modify the hier in progress before sending it off
+
+        i would like to keep the passing and parsing system the same
+        so it will not be possible to send 
+
+        the only thing that should change is the expected_paths accuracy
+        we can achieve this by introducing a new command, or rather
+        modifying the N_PASS_UP_ALERT
+
+        when a N_PASS_UP_ALERT command is recieved, 
+        node increments counter
+        /* node appends new pass up alert nick */
+        node checks whether all of its direct children
+        have sent an N_PASS_UP_ALERT
+        if not, do nothing
+        otherwise
+
+        GET RID OF usleep(x)
+        #endif
+
+        /*
+        if /p is called by the root, ncn never goes down
+        it instead just keeps going up :eek:
+        */
+
             #ifdef DEBUG
             puts("got HIER_REQ, testing leafiness...");
             #endif
@@ -695,15 +729,19 @@ void handle_msg(struct node_peer* np, struct msg_header header, char* buf){
                 #endif
                 struct msg_header pu_h;
                 pu_h.type = N_PASS_UP_ALERT;
-                pu_h.bufsz = 1;
-                char spoof;
-                /* else? */pass_msg_up(np->n, pu_h, &spoof, np->n->sock);
+                /*
+                 * pu_h.bufsz = 1;
+                 * char spoof;
+                */
+                pu_h.bufsz = sizeof(int);
+                int one = 1;
+                /* else? */pass_msg_up(np->n, pu_h, (char*)&one, np->n->sock);
                 #ifdef DEBUG
                 puts("passed up N_PASS_UP_ALERT");
                 #endif
 
                 /* give a little time */
-                usleep(100000);
+                /*usleep(100000);*/
                 pu_h.type = NICK_ALERT;
                 /* we're not using NICKLEN because we need
                  * to fit many nicks
@@ -718,9 +756,11 @@ void handle_msg(struct node_peer* np, struct msg_header header, char* buf){
             puts("expected_paths, paths_recvd set to 0");
             #endif
             pthread_mutex_lock(&np->n->expected_paths_lock);
+            puts("\n\n\nRESETTING\n\n");
             *np->n->path_str = 0;
             np->n->expected_paths = 0;
             np->n->paths_recvd = 0;
+            np->n->children_notified = 0;
             pthread_mutex_unlock(&np->n->expected_paths_lock);
             /*
              * else if(is_root(np->n)){
@@ -739,6 +779,49 @@ void handle_msg(struct node_peer* np, struct msg_header header, char* buf){
             else spread_msg(np->n, header, buf, np->p.sock);
             break;
         case N_PASS_UP_ALERT:
+            pthread_mutex_lock(&np->n->expected_paths_lock);
+            ++np->n->children_notified;
+            printf("npn incremented to %i!\n", np->n->children_notified);
+            /* would this happen from diff threads? 
+             * could just lock on expected_paths_lock
+             * i think it couldn't tbh - there's only one thread
+             * for each child
+             * oh wait this means we do need to lock
+             * if another child sends a simultaneous msg
+             * we'll be inaccurate
+             */
+            /* after a new request, expected_paths is always 0 */
+            /* n_new is recursive children */
+            int n_new;
+            memcpy(&n_new, buf, sizeof(int));
+            /*printf();*/
+            np->n->expected_paths += n_new;// + 1;
+            /*np->n->expected_paths += n_new + 1;*/
+            /* only once all of our children have notified us
+             * will we pass the message up
+             */
+            printf("expected pahts inc to %i\n", np->n->expected_paths);
+            if(np->n->children_notified == np->n->n_children){
+                /* we're the root and have recvd all children's paths */
+                if(is_root(np->n)){
+                    
+                }
+                else{
+                    printf("we've collected all childrens' numbers :)\n");
+                    /* ourself */
+                    /*
+                     * ++np->n->expected_paths;
+                     * wait this is actually decent code to print the number of users in the net...
+                     * it doesn't, however, inform the root of how many leaves there are in total
+                    */
+                    pass_msg_up(np->n, header, (char*)&np->n->expected_paths, np->p.sock);
+                }
+            }
+
+            /* below here is the old implementation */
+            pthread_mutex_unlock(&np->n->expected_paths_lock);
+            break;
+            /*pthread_mutex_unlock(&np->n->expected_paths_lock);*/
             if(is_root(np->n)){
                 pthread_mutex_lock(&np->n->expected_paths_lock);
                 #ifdef DEBUG
@@ -794,7 +877,10 @@ void handle_msg(struct node_peer* np, struct msg_header header, char* buf){
 
                     #endif
 
-                if(np->n->paths_recvd == np->n->expected_paths){
+                /*if(np->n->paths_recvd == np->n->expected_paths){*/
+                /*proper string is constructed but message isn't spread... why?:*/
+                printf("ncn: %i, nc: %i, pathsrcvd: %i, exp: %i\n", np->n->children_notified, np->n->n_children, np->n->paths_recvd, np->n->expected_paths);
+                if(np->n->children_notified == np->n->n_children && np->n->paths_recvd == np->n->expected_paths){
                     struct msg_header sp_h;
                     sp_h.type = HIER_ALERT;
                     sp_h.bufsz = strlen(np->n->path_str);
@@ -810,6 +896,7 @@ void handle_msg(struct node_peer* np, struct msg_header header, char* buf){
                 }
                 pthread_mutex_unlock(&np->n->expected_paths_lock);
             }
+            /* !root */
             else{
                 struct msg_header pu_h;
                 pu_h.type = NICK_ALERT;
@@ -1171,6 +1258,7 @@ int main(int a, char** b){
                     pthread_mutex_lock(&n.expected_paths_lock);
                     *n.path_str = 0;
                     n.expected_paths = 0;
+                    n.children_notified = 0;
                     n.paths_recvd = 0;
                     pthread_mutex_unlock(&n.expected_paths_lock);
                     init_diagram_request(&n);
