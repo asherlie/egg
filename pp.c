@@ -58,7 +58,7 @@ void print_tree(char* tstr){
     }
 }
 
-#if 0
+#ifdef PP_MAIN
 int main(int a, char** b){
     /*char*** paths = malloc(sizeof(char**)*500);*/
     print_tree(b[1]);
