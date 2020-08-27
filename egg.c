@@ -841,7 +841,9 @@ void handle_msg(struct node_peer* np, struct msg_header header, char* buf){
         case NICK_ALERT:
             /* TODO: is_root() return should be stored up top */
             if(is_root(np->n)){
+                #ifdef DEBUG
                 printf("we're the root and we've been sent: \"%s\"\n", buf);
+                #endif
                 /*gotta combine it all until expected_paths is reached*/
                 pthread_mutex_lock(&np->n->expected_paths_lock);
                 ++np->n->paths_recvd;
@@ -852,7 +854,9 @@ void handle_msg(struct node_peer* np, struct msg_header header, char* buf){
 
                 /*sprintf(tmp_buf, "%s,%s|", np->n->nick, np->n->path_str);*/
                 sprintf(tmp_buf, "%s,%s|%s", np->n->nick, buf, np->n->path_str);
+                #ifdef DEBUG
                 printf("constructed str: %s\n", tmp_buf);
+                #endif
 
                 /*memcpy(tmp_buf, np->n->path_str, MSGLEN*100);*/
                 memcpy(np->n->path_str, tmp_buf, MSGLEN*100);
@@ -883,13 +887,17 @@ void handle_msg(struct node_peer* np, struct msg_header header, char* buf){
 
                 /*if(np->n->paths_recvd == np->n->expected_paths){*/
                 /*proper string is constructed but message isn't spread... why?:*/
+                #ifdef DEBUG
                 printf("ncn: %i, nc: %i, pathsrcvd: %i, exp: %i\n", np->n->children_notified, np->n->n_children, np->n->paths_recvd, np->n->expected_paths);
+                #endif
                 if(np->n->children_notified == np->n->n_children && np->n->paths_recvd == np->n->expected_paths){
                     struct msg_header sp_h;
                     sp_h.type = HIER_ALERT;
                     sp_h.bufsz = strlen(np->n->path_str);
                     *sp_h.nick = 0;
+                    #ifdef DEBUG
                     printf("spreading message: %s\n", np->n->path_str);
+                    #endif
                     spread_msg(np->n, sp_h, np->n->path_str, np->n->sock);
                     pthread_mutex_lock(&np->n->await_lock);
                     if(np->n->awaiting_alert){
@@ -915,7 +923,9 @@ void handle_msg(struct node_peer* np, struct msg_header header, char* buf){
             }
             break;
         case HIER_ALERT:
+            #ifdef DEBUG
             printf("got hier alert: %s\n", buf);
+            #endif
             pthread_mutex_lock(&np->n->await_lock);
             if(np->n->awaiting_alert){
                 /* TODO: take the expensive call to print_tree()
