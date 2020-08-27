@@ -4,6 +4,16 @@
 
 #include "pp.h"
 
+#ifdef COLOR_SUPPORT
+#define ANSI_RED     "\x1b[31m"
+#define ANSI_GREEN   "\x1b[32m"
+#define ANSI_YELLOW  "\x1b[33m"
+#define ANSI_BLUE    "\x1b[34m"
+#define ANSI_MAGENTA "\x1b[35m"
+#define ANSI_CYAN    "\x1b[36m"
+#define ANSI_RESET   "\x1b[0m"
+#endif
+
 struct path_list{
     int n_entries, cap;
     char** lst;
@@ -38,7 +48,11 @@ void print_tree(char* tstr){
         /*printf("path %i:\n", i);*/
         for(int j = 0; j < paths[i].n_entries-1; ++j){
             /*printf("  %i: %s\n", j, paths[i].lst[j]);*/
-            printf("%s->", paths[i].lst[j]);
+            #ifdef COLOR_SUPPORT
+            printf("%s%s<-%s", paths[i].lst[j], ANSI_RED, ANSI_RESET);
+            #else
+            printf("%s<-", paths[i].lst[j]);
+            #endif
         }
         printf("%s\n", paths[i].lst[paths[i].n_entries-1]);
     }
