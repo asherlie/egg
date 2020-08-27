@@ -752,7 +752,9 @@ void handle_msg(struct node_peer* np, struct msg_header header, char* buf){
             puts("expected_paths, paths_recvd set to 0");
             #endif
             pthread_mutex_lock(&np->n->expected_paths_lock);
+            #ifdef DEBUG
             puts("\n\n\nRESETTING\n\n");
+            #endif
             *np->n->path_str = 0;
             np->n->expected_paths = 0;
             np->n->paths_recvd = 0;
@@ -777,7 +779,9 @@ void handle_msg(struct node_peer* np, struct msg_header header, char* buf){
         case N_PASS_UP_ALERT:
             pthread_mutex_lock(&np->n->expected_paths_lock);
             ++np->n->children_notified;
+            #ifdef DEBUG
             printf("npn incremented to %i!\n", np->n->children_notified);
+            #endif
             /* would this happen from diff threads? 
              * could just lock on expected_paths_lock
              * i think it couldn't tbh - there's only one thread
@@ -796,14 +800,18 @@ void handle_msg(struct node_peer* np, struct msg_header header, char* buf){
             /* only once all of our children have notified us
              * will we pass the message up
              */
+            #ifdef DEBUG
             printf("expected pahts inc to %i\n", np->n->expected_paths);
+            #endif
             if(np->n->children_notified == np->n->n_children){
                 /* we're the root and have recvd all children's paths */
                 if(is_root(np->n)){
                     
                 }
                 else{
+                    #ifdef DEBUG
                     printf("we've collected all childrens' numbers :)\n");
+                    #endif
                     /* ourself */
                     /*
                      * ++np->n->expected_paths;
