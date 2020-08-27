@@ -2,7 +2,8 @@ CC=gcc
 CFLAGS=-O3 -Wall -Wextra -Werror -pthread -DCOLOR_SUPPORT# -DDEBUG
 
 all: egg
-egg: egg.c pp.c
+pp.o: pp.c pp.h
+egg: egg.c pp.o
 
 .PHONY:
 clean:
