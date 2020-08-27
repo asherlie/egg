@@ -341,10 +341,6 @@ a
  d
  c
 
-struct pt{
-    char* nick;
-    struct pt* kk
-};
 
 a
 be d cghi cf
