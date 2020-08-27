@@ -665,7 +665,6 @@ void init_diagram_request(struct node* n){
     /* at least 1 byte must be sent */
     header.bufsz = 1;
     char spoof = (is_leaf(n) || is_root(n)) ? 'z' : 'a';
-    /*spread_msg(n, header, &spoof, n->sock);*/
     pthread_mutex_lock(&n->await_lock);
     n->awaiting_alert = 1;
     pthread_mutex_unlock(&n->await_lock);
@@ -673,7 +672,11 @@ void init_diagram_request(struct node* n){
 }
 
 _Bool peer_eq(struct peer x, struct peer y){
-    return (x.sock == y.sock && x.addr.sin_addr.s_addr == y.addr.sin_addr.s_addr);
+    /* w can't simply check for address equality, as addresses
+     * aren't guaranteed to be unique
+     */
+    return (x.sock == y.sock &&
+            x.addr.sin_addr.s_addr == y.addr.sin_addr.s_addr);
 }
 
 void handle_msg(struct node_peer* np, struct msg_header header, char* buf){
