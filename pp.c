@@ -64,38 +64,5 @@ int main(int a, char** b){
     print_tree(b[1]);
 
     return 0;
-    #if 0
-
-    printf("found %i |s\n", ind);
-    for(int i = 0; i < ind; ++i){
-        printf("path %i:\n", i);
-        for(int j = 0; j < paths[i].n_entries; ++j){
-            printf("  %i: %s\n", j, paths[i].lst[j]);
-        }
-    }
-
-    return 0;
-    int max_entrylen = 5;
-
-    char shared;
-    for(int i = 0; i < ind-1; ++i){
-        for(int j = 0; j < max_entrylen; ++j){
-            /*if(paths[i].n_entries <= j)continue;//hopefully to next i*/
-            if(!strcmp(paths[i].lst[j], paths[i+1].lst[j])){
-                printf("^");
-            }
-            else if(1)
-                printf("%s", paths[i].lst[j]);
-            printf("-\n");
-            /*if(paths[i].lst[j])*/
-        }
-    }
-    #endif
 }
-/*
- * 
- * struct node{
- *     struct node* parent, ** children;
- * };
-*/
 #endif
