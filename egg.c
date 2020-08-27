@@ -565,7 +565,6 @@ struct node_peer{
 /* node operations */
 
 void init_node(struct node* n, char* nick, struct sockaddr_in local_addr){
-/*void init_node(struct node* n){*/
     memcpy(n->nick, nick, NICKLEN-1);
     n->nick[NICKLEN-1] = 0;
 
@@ -577,12 +576,16 @@ void init_node(struct node* n, char* nick, struct sockaddr_in local_addr){
     pthread_mutex_init(&n->children_lock, NULL);
     pthread_mutex_init(&n->expected_paths_lock, NULL);
 
-    if((n->sock = socket(AF_INET, SOCK_STREAM, 0)) == -1)perror("socket()");
+    if((n->sock = socket(AF_INET, SOCK_STREAM, 0)) == -1)
+        perror("socket()");
     int tr = 1;
-    if(setsockopt(n->sock, SOL_SOCKET, SO_REUSEADDR, &tr, sizeof(int)) == -1)perror("setsockopt()");
-    if(bind(n->sock, (struct sockaddr*)&local_addr, sizeof(struct sockaddr_in)) == -1)perror("bind()");
+    if(setsockopt(n->sock, SOL_SOCKET, SO_REUSEADDR, &tr, sizeof(int)) == -1)
+        perror("setsockopt()");
+    if(bind(n->sock, (struct sockaddr*)&local_addr, sizeof(struct sockaddr_in)) == -1)
+        perror("bind()");
 
-    if(listen(n->sock, 5) == -1)perror("listen()");
+    if(listen(n->sock, 5) == -1)
+        perror("listen()");
     n->n_children = 0;
     n->children_cap = 50;
     memset(&n->parent, 0, sizeof(struct peer));
@@ -606,7 +609,6 @@ _Bool is_root(struct node* n){
     return n->parent.sock == -1;
 }
 
-/*_Bool spread_msg(struct node* n, int msglen, char* msg, int from_sock){*/
 _Bool spread_msg(struct node* n, struct msg_header header, char* msg, int from_sock){
     _Bool ret = 1;
     /*
