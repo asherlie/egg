@@ -180,7 +180,7 @@ each client will probably need
 
 #include "pp.h"
 
-#define VER_STR "1.0.2"
+#define VER_STR "1.0.3"
 
 #define PORT 8080
 
