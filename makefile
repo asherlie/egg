@@ -1,5 +1,5 @@
 CC=gcc
-CFLAGS=-O3 -Wall -Wextra -Werror -pthread -DCOLOR_SUPPORT# -DDEBUG
+CFLAGS=-O3 -Wall -Wextra -Werror -Wpedantic -pthread -DCOLOR_SUPPORT# -DDEBUG
 
 all: egg
 pp.o: pp.c pp.h
