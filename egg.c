@@ -1084,7 +1084,7 @@ void* accept_connections_thread(void* node_v){
     struct node* n = node_v;
 
     struct sockaddr_in addr;
-    socklen_t addrlen;
+    socklen_t addrlen = sizeof(struct sockaddr_in);
 
     while(n->active){
         /* TODO: check if addrlen != sizeof(struct sockaddr_in) */
